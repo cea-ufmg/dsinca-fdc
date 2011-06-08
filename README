@@ -1,0 +1,27 @@
+****************************************************************************
+** Projeto FAPEMIG - UFMG - 10/2008
+** Desenvolvimento de Sistemas de Instrumentacao, Navegacao e Controle 
+** de Aeronaves.
+** Data da implantacao: 23/01/2007
+** Data de termino:     08/01/2009
+****************************************************************************
+
+Coordenadores: Leonardo Torres, Paulo Iscold e Guilherme Pereira.
+
+PROGRAMA FDC_master
+
+Autores: 
+	Prof. Leonardo Torres, 
+	Prof. Guilherme Pereira.
+
+Finalidade: Gerenciador da tarefa de tempo real e dos arquivos
+de dados relativos a cada ensaio em vôo realizado. Interface
+homem-máquina para configuração da tarefa de tempo real sem
+necessidade de recompilação de código.
+
+Observacoes: codigo adaptado do codigo original elaborado para
+coleta de dados do veiculo aereo nao tripulado - Piper - desenvolvido
+durante o Projeto SiDeVAAN, por Leonardo Torres, Armando Neto, Marcio
+e Flavio Mota.
+
+

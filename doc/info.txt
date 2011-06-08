@@ -1,0 +1,267 @@
+_______________________________________________________________________________
+
+UFMG/DELT/DEMEC
+Projeto DSINCA - FAPEMIG
+Desenvolvimento de Sistemas de Instrumentacao, Navegacao e Controle
+de Aeronaves
+
+24/10/2008
+Autores: Leonardo Tôrres, Guilherme Pereira e Paulo Iscold
+_______________________________________________________________________________
+
+Introdução
+-----------
+
+Aqui estarão contidas todas as informações necessárias para a utilização
+dos softwares desenvolvidos para o projeto DSINCA, além de explicacoes
+sobre a estruturação básica dos processos.
+
+Existem dois sub-sistemas dentro da pataforma computacional para coleta
+de dados de voo. Um é executado em tempo real, denominado "FDC Slave", e outro 
+que roda dentro do espaço de usuário, denominado "FDC Master". Estes dois processos agem
+de forma interativa, com o objetivo de gerenciar a captura de dados e a executar 
+tarefas de controle da aeronave, além de permitir uma interação com o usuario 
+por meio de uma IHM, descrita mais abaixo.
+
+A seguir, serão apresentados em detalhes a estrutura dos dois sub-sistemas, tal 
+como o processo de comunicação existente entre eles e a interação com o usuário.
+
+_________________________________________________________________________________
+
+Detalhes da estrutura de software
+---------------------------------
+
+Como foi dito anteriormente, o sistema de aquisição de dados e controle 
+fundamenta-se em 2 sub-sistemas básicos de software:
+
+1. Sub-sistema de tempo real "FDC_slave"
+   ---------------------------------------
+
+Este sub-sistema é responsável pela execução periódica de atividades de
+aquisição de dados, cálculo de ações de controle e atuação,
+em tempo real.
+
+A unidade principal do sub-sistema é o módulo do kernel "fdc_slave",
+que contém a tarefa de tempo real executada a cada 20ms (ou seja, f=50Hz),
+a qual foi concebida no contexto das extensões de tempo real para Linux 
+providas pelo pacote RTAI (www.rtai.org).
+
+Neste periodo, a tarefa de tempo real efetua a leitura dos 16 canais da 
+placa de aquisição de dados, lê as variáveis de velocidades angulares e 
+acelerações fornecidas pela unidade de medição inercial, e observa a fila 
+de comandos para ver ser alguma ordem foi enviada para o modulo. Assim 
+todas estas tarefas são realizadas a uma taxa de 50 vezes por segundo.
+Além disso, outras tarefas são realizadas pelo modulo de tempo real, porém
+com uma frequência bem menor, como a leitura dos dados do GPS+altimetro (5Hz).
+
+
+A comunicação com programas em espaço do usuário é realizada através
+de FIFOs de tempo real (/dev/rtf0 a /dev/rtf4), através das quais
+são enviadas mensagens de erro e status, são recebidos comandos e são
+enviados dados relativos ao sistemas GPS+altimetro, AHRS, e placa DAQ. 
+Desta forma, as três fifos de dados e uma de status transportam 
+bytes do modulo de tempo real para os programas em modo usuário, 
+e a fifo de comandos faz o caminho inverso. 
+
+O modulo efetua a abertura de todos os dispositivos, e caso alguma coisa 
+saia errado, o modulo informa o erro ocorrido e termina sua execução.
+
+1.1. Especificações do modulo de tempo real
+     --------------------------------------
+
+Configuração das fifos:
+
+	- "/dev/rtf0" (Fifo de dados da AHRS);
+	- "/dev/rtf1" (Fifo de dados da placa DAQ);
+	- "/dev/rtf2" (Fifo de dados do GPS+altimetro);
+	- "/dev/rtf3" (Fifo de controle);
+	- "/dev/rtf4" (Fifo de status ou erro);
+	- "/dev/rtf5" (Fifo de dados de acao de controle gerada pelo codigo do controlador rodando no "fdc_slave").
+
+Portas seriais:
+
+	- "COM1" (Reservada para uso da AHRS);
+	- "COM2" (Reservada para uso do GPS+altimetro);
+	- "COM3" (Reservada para uso atuador EPOS).
+
+Endereçamento Base de dispositivos
+
+	- 0x300 (Placa de aquisição de dados).
+
+2. Sub-sistema em espaço de usuário "fdc_master"
+   -------------------------------------------
+
+Este sub-sistema é responsável pela interface IHM. Além disso,
+é também responsável pelo armazenamento dos dados recebidos
+no sistema de arquivos, bem como pela gerência destes arquivos
+a cada ensaio em vôo.
+
+O "fdc_master" comunica-se com o sub-sistema de tempo real
+através de FIFOS de tempo real, conforme explicado acima, ou 
+seja, enviando comandos através da fifo de controle e recebendo
+dados por meio das demais fifos. Além disso, ele também interage
+com o usuário, que pode enviar comando tanto para o programa de 
+modo usuario (de forma direta) quanto para o modulo de tempo real
+(de forma indireta), valendo-se da utilização de uma outra fifo 
+(fifo comum = /tmp/fdc_ctrl), criada para este fim.
+
+Para gerenciar a comunicação de dados entre os processos, o "fdc_master"
+lança uma thread que fica inteiramente responsável por salvar em 
+arquivos pré-definidos, os dados que vêm das três primeiras fifos de 
+tempo real. Assim, o programa principal fica livre para receber os 
+comandos do usuário, e repassá-los, se necessário, ao módulo de tempo
+real, esperando por sua resposta.
+
+Já para gerenciar a comunicação entre o sistema e o usuário, o "fdc_master"
+lança um sub-processo filho chamado de "fdc_cmd_parser", que fica 
+responsável por ler a fifo de comandos do usuário, interpretar estes
+comandos, e repassá-los ao programa "fdc_master", que poderá ou não enviar
+ordens ao "fdc_slave".
+
+Desta forma, o "fdc_master", atua tanto como um programa multi-tarefa (ou 
+multi-threadding) quanto um programa multi-processo. Uma representação 
+da árvore de processos correspondente ao sub-sistema "FDC Master" está 
+mostrada abaixo:
+
+init
+  |
+  |-----fdc_master
+	   |
+	   |
+	   |---- fdc_cmd_parser -----> receber comandos textuais
+	   |			       do usuário.
+	   |
+	   |---- save_data ----> gravar arquivos de dados.
+
+A comunicação entre os processos se dá através de pipes, o que permite
+reaproveitar o mecanismo de comunicação entre os sub-sistemas FDC Master
+e FDC Slave.
+
+O "FDC Master" executa os seguintes procedimentos quando é executado:
+
+   1 - Cria a FIFO "fdc_ctrl" através da qual o usuário pode
+   enviar comandos textuais para modificar os parâmetros de controle
+   e aquisição de dados do sistema como um todo, evitando a necessidade
+   de recompilação.
+
+   2 - Lança o processo filho "fdc_cmd_parser" que tem por finalidade
+   ler constantemente o conteúdo da FIFO "fdc_ctrl", interpretar os
+   comandos textuais enviados, e enviar a mensagem final ao processo
+   pai "fdc_master".
+
+
+   3 - Ao receber uma mensagem de controle para o sistema de aquisição
+   e controle, toma as providências necessárias para atender a demanda.
+   
+Outra característica importante é a possibilidade de gerar comandos para 
+o sistema através de um único arquivo de configuração, o que automatiza 
+o processo de interação com o programa fdc_master.
+
+
+2.1. Especificações do programa de usuário
+     -------------------------------------
+
+Execução do programa fdc_master
+
+	- ./fdc_master (acessa imediatamente a fifo de controle "fdc_ctrl");
+	- ./fdc_master -f [nome_do_arquivo] (Acessa primeiro um arquivo de 
+					   configuração de comandos - por 
+					   exemplo "./fdc.conf" );
+
+Configuração das fifos:
+
+	- As mesmas do modulo de tempo real;
+	- "/tmp/fdc_ctrl" (Fifo comum de interação com o usuário);
+
+Configuração dos arquivos de dados
+
+	- "/tmp/data" (Diretório padrão);
+	- "/tmp/data/daq_file_default.dat" (Arquivo padrão da placa DAQ);
+	- "/tmp/data/imu_file_default.dat" (Arquivo padrão da IMU);
+	- "/tmp/data/gps_file_default.dat" (Arquivo padrão do GPS);
+	- "./fdc.conf" (Arquivo default de configuração de comandos);
+
+_______________________________________________________________________________
+
+Descrição dos comandos possíveis para o UAV
+-------------------------------------------
+
+Os comandos enviados por meio da fifo normal de controle são lidos e 
+interpretados pelo processo Uav_cmd_parser, que por sua vez efetua uma 
+análise lexicográfica, traduzindo estes comandos para o fdc_master. Assim,
+dependendo do tipo de comando que se quer implementar, esta informação 
+é processada pelo programa de modo usuário, ou simplesmente repassada 
+para o modulo de tempo real.
+
+Estes comandos não diferenciam maiúsculas e minúsculas (case-insensitives), 
+e geralmente apresentem a seguinte estrutura:
+
+      echo -e  "[COMANDO] [OPÇÃO] [DADO]\n" > /tmp/fdc_ctrl,
+      
+onde um COMANDO é fornecido à fila de mensagens do processo parser (fdc_ctrl)
+por meio da função "echo". Dependendo do tipo de comando, pode ou não haver
+uma [OPÇÂO] ou um [DADO] para este. 
+	
+   	Ex.:
+   	echo -e  "change datfile gps teste.dat\n" > /tmp/fdc_ctrl
+	
+onde "change datfile" é um [COMANDO] para mudança do nome de arquivo de 
+dados, "gps" é a [OPÇÂO] de arquivo, e "teste.dat" é o [DADO] que 
+representa o nome do novo arquivo.
+
+Os comandos também podem ser aninahdos numa mesma linha, sendo separados
+internamente por meio da utilização dos caracteres "\n".
+
+	Ex.:
+   	echo -e  "change datfile gps teste.dat\n change ts GPS 10\n start\n" > /tmp/fdc_ctrl
+	
+
+Lista de comandos
+-----------------
+
+   	1 -  "start" ou "begin"
+	Opções: não há.
+	Dados:  não há.
+	Função: Iniciar ou reiniciar o loop de tempo real para coleta de dados e controle do UAV.
+	Ex.:
+		echo -e "start\n" > /tmp/fdc_ctrl
+	
+	------------------------------------------------------------------------------------------
+	2 - "stop" ou "pause"
+	Opções: não há.
+	Dados:  não há.
+	Função: Paralizar o loop de tempo real para coleta de dados e controle do UAV.
+	Ex.:
+		echo -e "stop\n" > /tmp/fdc_ctrl
+   	
+	------------------------------------------------------------------------------------------
+	3 -  "quit" , "exit" ou "terminate"
+	Opções: não há.
+	Dados:  não há.
+	Função: Terminar o loop de tempo real para coleta de dados e controle do UAV,
+		e encerrar o modulo de tempo real, o processo parser e o fdc_master.
+	Ex.:
+		echo -e "quit\n" > /tmp/fdc_ctrl
+	
+	------------------------------------------------------------------------------------------
+	4 - "change datfile" , "change dat" ou "change file"
+	Opções: [daq|imu|gps].
+	Dados:  [novo_nome_para_o_arquivo.dat]
+	Função: Alterar o nome do arquivo referente aos dados coletados da opção escolhida 
+		para o novo nome descritos em [DATA]. O sistema será paralizado para a mudança
+		e após a reinicialização, os dados fornecidos pelo modulo de tempo real
+		para aquela opção serão agora salvos no novo arquivo. O diretório que contém 
+		todos os arquivos permanecerá sendo o padrão ("/tmp/data").
+	Ex.: (mudança de arquivo para salvamento dos dados da placa daq)
+		echo -e "change datfile daq new_file_daq.dat" > /tmp/fdc_ctrl
+
+	------------------------------------------------------------------------------------------
+	5 - "nodata"
+	Opções: [daq|imu|gps].
+	Dados:  não há.
+	Função: Cancelar a coleta de dados do dispositivo escolhido na opção, dentro do 
+		modulo de tempo real, sem paralizar o processo.
+	Ex.: (cancelamento da coleta de dados da imu)
+		echo -e "nodata imu" > /tmp/fdc_ctrl
+	
+	------------------------------------------------------------------------------------------

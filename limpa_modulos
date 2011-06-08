@@ -1,0 +1,10 @@
+rmmod fdc_slave
+rmmod rtai_gps
+rmmod rtai_daq
+rmmod rtai_ahrs
+rmmod rtai_fifos
+rmmod rtai_serial
+rmmod rtai_sem
+rmmod rtai_up
+rmmod rtai_ksched
+rmmod rtai_hal
