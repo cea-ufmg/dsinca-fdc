@@ -18,7 +18,7 @@ INCLUDE = -I$(RT_KERNEL)/include -I$(RTAI)/include
 VPATH = ./src:./include:./object
 
 ########################################################################################
-all : save_data ioSockets fdc_master fdc_cmd_parser rtai_gps rtai_daq rtai_ahrs rtai_nav rtai_pitot fdc_slave
+all : save_data ioSockets fdc_master fdc_cmd_parser rtai_gps rtai_daq rtai_ahrs rtai_nav rtai_pitot fdc_slave object/epos.o
 
 ## Thread de salvamento dos dados
 save_data : save_data.c save_data.h messages.h fdc_structs.h
@@ -50,7 +50,7 @@ fdc_master : fdc_master.c fdc_master.h messages.h fdc_structs.h save_data.h save
 ## jah processadas para fdc_master.
 fdc_cmd_parser : fdc_cmd_parser.c fdc_cmd_parser.h messages.h
 	$(CC) $(CFLAGS) $(INCLUDE) ./src/fdc_cmd_parser.c -o $@
-		
+
 ## Codigo C do analisador lexicografico gerado automaticamente
 ## pelo pacote "flex".
 fdc_cmd_parser.c : fdc_cmd_parser.y
@@ -110,6 +110,10 @@ fdc_slave: fdc_slave.c fdc_slave.h messages.h rtai_crc.h rtai_rt_serial.h rtai_d
 	$(CC) $(MFLAGS) $(INCLUDE) -c $< -o $(OBJDIR)/$@.o
 	##
 	
+
+$(OBJDIR)/%.o: $(SRCDIR)/%.c $(INCLUDEDIR)/%.h
+	$(CC) $(MFLAGS) $(INCLUDE) -c $< -o $@
+
 ########################################################################################	
 ## Instalacao e retirada dos modulos
 in:
