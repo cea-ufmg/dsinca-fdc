@@ -36,7 +36,6 @@
 #include <linux/init.h>
 #include <linux/kernel.h>
 #include <linux/types.h>
-#include <linux/crc-ccitt.h>
 
 #include <rtai_serial.h>
 
@@ -64,10 +63,10 @@ MODULE_PARM_DESC (baud, "The baud rate. Integer value (default 38400)");
 #define PARITY RT_SP_PARITY_NONE
 #define STOPBITS 1
 #define HARDCTRL RT_SP_NO_HAND_SHAKE
-#define SERIAL_FIFO_SIZE RT_SP_FIFO_SIZE_14 //This is tied to MAX_PAYLOAD
+#define FIFOTRIG RT_SP_FIFO_SIZE_1
 
 //Packet parameters
-#define MAX_PAYLOAD 14 //This should not exceed SERIAL_FIFO_SIZE
+#define MAX_PAYLOAD 512 //This should not exceed SERIAL_FIFO_SIZE
 
 /** Driver state machine codes **/
 typedef enum {
@@ -91,17 +90,30 @@ typedef enum {
 
 /** Driver variables **/
 static driver_state_t state;
-static u8 outbound_payload[MAX_PAYLOAD];
-static u8 inbound_payload[MAX_PAYLOAD];
+static char outbound_payload[MAX_PAYLOAD];
+static char inbound_payload[MAX_PAYLOAD];
 
 static int outbound_payload_len;
 static int inbound_payload_len;
+
+static int has_response;
+
+/** Declare the internal functions **/
+static write_status_t send_opcode(char opcode);
+static void read_begin_ack();
+static void read_end_ack();
+static void send_payload();
+static void recv_response();
+static u16 crc_word(u16,u16);
+static u16 crc_data(u16,u8*,int);
+
+static void debug();
 
 static int __init epos_init() {
   int err;
   
   err = rt_spopen(ser_port, baud,  DATABITS, STOPBITS,
-		  PARITY, HARDCTRL, SERIAL_FIFO_SIZE);
+		  PARITY, HARDCTRL, FIFOTRIG);
   switch (err) {
   case -ENODEV:
     errmsg("Serial port number rejected by rtai_serial.");
@@ -120,6 +132,8 @@ static int __init epos_init() {
     errmsg("Invalid parameters for setting serial port callback.");
     goto spset_callback_fail;
   }
+
+  debug();
   
   return 0;
 
@@ -139,18 +153,26 @@ module_init(epos_init);
 module_exit(epos_cleanup);
 
 static void serial_callback(int rxavail, int txfree) {
+  printk("serial_callback(%d,%d)\n",rxavail,txfree);
+  
   switch (state) {
-  case READY: return;
+  case READY: errmsg("READY"); return;
   case SENDING_OPCODE:
-    if (txfree == MAX_PAYLOAD) state = WAITING_BEGIN_ACK; //opcode was sent
-    break;
+    errmsg("s opcode");
+    if (txfree == MAX_PAYLOAD) state = WAITING_BEGIN_ACK; //opcode was sent    
+    //fall-through for the case the end of transmission and response reception
+    //are handled by the same callback
   case WAITING_BEGIN_ACK:
-    if (rxavail == 1) read_begin_ack();
+    errmsg("wba");
+    if (rxavail >= 1) read_begin_ack();
     break;
   case SENDING_DATA:
+    errmsg("sd");
     if (txfree == MAX_PAYLOAD) state = WAITING_END_ACK; //data was sent
-    break;
+    //intentional fall-through again, same reasons
   case WAITING_END_ACK:
+    errmsg("wea");
+    if (rxavail == 1) read_end_ack();
     break;
   case WAITING_RESPONSE_LEN:
     break;
@@ -165,7 +187,7 @@ static void errmsg(char* msg){
   printk("EPOS driver: %s\n",msg);
 }
 
-static write_status_t send_opcode(u8 opcode) {
+static write_status_t send_opcode(char opcode) {
   int num_not_written = rt_spwrite(ser_port, &opcode, 1);
 
   switch (num_not_written) {
@@ -186,16 +208,31 @@ static void read_begin_ack() {
     send_payload();
   else //Fail
     state = READY;
+}
+
+static void read_end_ack() {
+  char ack;
+  rt_spread(ser_port, &ack, 1);
   
+  if (ack == 'O' && has_response) //Okay
+    recv_response();
+  else
+    state = READY;
+
+  printk("EPOS end ack: %c\n",ack);
 }
 
 static void send_payload() {
   int num_not_written;
+  
   rt_spset_thrs(ser_port, 1, outbound_payload_len);
-  num_not_written = rt_spwrite(ser_port, &outbound_payload,
-			       -outbound_payload_len);
+  num_not_written = rt_spwrite_timed(ser_port, outbound_payload,
+				     outbound_payload_len,DELAY_FOREVER);
   if (num_not_written != 0) state = READY;
   else state = SENDING_DATA;
+}
+
+static void recv_response() {
 }
 
 static write_status_t write_object(u16 index,u8 subindex,
@@ -209,6 +246,7 @@ static write_status_t write_object(u16 index,u8 subindex,
     u8 bytes[4];
   } data_union = {__cpu_to_le32(data)};
   u8 opcode = 0x11;
+  u8 len_m1 = 3;//data length - 1
   union {
     u16 word;
     u8 bytes[2];
@@ -221,19 +259,67 @@ static write_status_t write_object(u16 index,u8 subindex,
   if (stat != SUCCESS) return stat;
 
   //Fill out the payload
-  outbound_payload[0] = 3; //data length - 1
+  outbound_payload[0] = len_m1;
   memcpy(outbound_payload +1, index_union.bytes, 2);
   outbound_payload[3] = subindex;
   outbound_payload[4] = nodeid;
   memcpy(outbound_payload + 5, data_union.bytes, 4);
 
   //Calculate the CRC
-  crc.word = crc_ccitt_byte(0, opcode);
-  crc.word = __cpu_to_le16(crc_ccitt(crc.word, outbound_payload, 9));
+  crc.word = crc_word(0, ((u16)opcode << 8) + (u16)len_m1);
+  crc.word = __cpu_to_le16(crc_data(crc.word, outbound_payload+1, 8));
 
   //Append the CRC to the end of the packet
   memcpy(outbound_payload + 9, crc.bytes, 2);
 
   outbound_payload_len = 11;
+  has_response = 0;
+  
   return SUCCESS;
+}
+
+static void debug() {
+  write_status_t st = write_object(0x6040,0,0,0xF);//Enable operation
+  //write_status_t st = write_object(0x6060,0,0,0xFE);//mode of operation: velocity
+}
+
+/**
+ * The code below calculates the CRC of the message as expected by the EPOS. In
+ * the manual they said the crc-ccitt algorithm is used but the code and
+ * examples provided show that actually the XMODEM variety is used so the kermit
+ * algorithm (for which there is a standard kernel module) cannot be used.
+ */
+
+/**
+ * This function is adapted from the epos communication guide manual.
+ */
+static u16 crc_word(u16 crc, u16 data) {
+  u16 carry;
+  u16 shifter = 0x8000; //Initialize bitX to bit15
+  
+  do {
+    carry = crc & 0x8000;      //Check if bit15 of CRC is set
+    crc <<= 1;                 //crc = crc * 2
+    if(data & shifter) crc++;  //crc = crc + 1, if bitX is set in the data
+    if(carry) crc ^= 0x1021;   //crc = crc xor G(x), if carry is true
+    shifter >>= 1;             //Set bitX to next lower bit (divide by 2)
+  } while (shifter);
+  
+  return crc;
+}
+
+static u16 crc_data(u16 crc, u8* data, int len) {
+  u16 curr_word;
+  
+  len -= (len % 2); //For safety.
+  while (len > 0) {
+    curr_word = *data++;
+    curr_word += ((u16) *data++) << 8;
+
+    crc = crc_word(crc, curr_word);
+    
+    len -= 2;
+  }
+
+  return crc;
 }
