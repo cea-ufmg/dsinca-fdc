@@ -68,6 +68,11 @@ MODULE_PARM_DESC (baud, "The baud rate. Integer value (default 38400)");
 //Packet parameters
 #define MAX_PAYLOAD 512 //This should not exceed SERIAL_FIFO_SIZE
 
+//OPCODES
+enum {
+  OPCODE_RESPONSE = 0x00
+};
+  
 /** Driver state machine codes **/
 typedef enum {
   READY,
@@ -75,9 +80,10 @@ typedef enum {
   WAITING_BEGIN_ACK,
   SENDING_DATA,
   WAITING_END_ACK,
-  WAITING_RESPONSE_LEN,
+  WAITING_RESPONSE_OPCODE,
+  SENDING_RESPONSE_BEGIN_ACK,
   WAITING_RESPONSE_DATA,
-  SENDING_RESPONSE_ACK
+  SENDING_RESPONSE_END_ACK
 } driver_state_t;
 
 /** Return codes **/
@@ -96,15 +102,16 @@ static char inbound_payload[MAX_PAYLOAD];
 static int outbound_payload_len;
 static int inbound_payload_len;
 
-static int has_response;
+static char response_ack;
 
 /** Declare the internal functions **/
 static write_status_t send_opcode(char opcode);
 static void read_begin_ack();
 static void read_end_ack();
 static void send_payload();
-static void recv_response();
-static u16 crc_word(u16,u16);
+static void read_response_opcode();
+static void read_response_payload();
+static u16 crc_byte(u16,u8);
 static u16 crc_data(u16,u8*,int);
 
 static void debug();
@@ -153,32 +160,32 @@ module_init(epos_init);
 module_exit(epos_cleanup);
 
 static void serial_callback(int rxavail, int txfree) {
-  printk("serial_callback(%d,%d)\n",rxavail,txfree);
-  
   switch (state) {
   case READY: errmsg("READY"); return;
   case SENDING_OPCODE:
-    errmsg("s opcode");
     if (txfree == MAX_PAYLOAD) state = WAITING_BEGIN_ACK; //opcode was sent    
     //fall-through for the case the end of transmission and response reception
     //are handled by the same callback
   case WAITING_BEGIN_ACK:
-    errmsg("wba");
     if (rxavail >= 1) read_begin_ack();
     break;
   case SENDING_DATA:
-    errmsg("sd");
     if (txfree == MAX_PAYLOAD) state = WAITING_END_ACK; //data was sent
     //intentional fall-through again, same reasons
   case WAITING_END_ACK:
-    errmsg("wea");
-    if (rxavail == 1) read_end_ack();
+    if (rxavail >= 1) read_end_ack();
     break;
-  case WAITING_RESPONSE_LEN:
+  case WAITING_RESPONSE_OPCODE:
+    if (rxavail >= 1) read_response_opcode();
     break;
+  case SENDING_RESPONSE_BEGIN_ACK:
+    if (txfree == MAX_PAYLOAD)
+      state = response_ack == 'O' ? WAITING_RESPONSE_DATA : READY;
   case WAITING_RESPONSE_DATA:
+    if (rxavail >= inbound_payload_len) read_response_payload();
     break;
-  case SENDING_RESPONSE_ACK:
+  case SENDING_RESPONSE_END_ACK:
+    if (txfree == MAX_PAYLOAD) state = READY;
     break;    
   }
 }
@@ -214,25 +221,52 @@ static void read_end_ack() {
   char ack;
   rt_spread(ser_port, &ack, 1);
   
-  if (ack == 'O' && has_response) //Okay
-    recv_response();
+  if (ack == 'O' && inbound_payload_len > 0) //Okay
+    state = WAITING_RESPONSE_OPCODE;
   else
     state = READY;
-
-  printk("EPOS end ack: %c\n",ack);
 }
 
 static void send_payload() {
   int num_not_written;
   
   rt_spset_thrs(ser_port, 1, outbound_payload_len);
-  num_not_written = rt_spwrite_timed(ser_port, outbound_payload,
-				     outbound_payload_len,DELAY_FOREVER);
+  num_not_written = rt_spwrite(ser_port, outbound_payload,
+			       -outbound_payload_len);
   if (num_not_written != 0) state = READY;
   else state = SENDING_DATA;
 }
 
-static void recv_response() {
+static void read_response_opcode() {
+  int num_not_written;
+  char opcode;
+  
+  rt_spread(ser_port, &opcode, 1);
+  response_ack = opcode == OPCODE_RESPONSE ? 'O' : 'F';
+  
+  num_not_written = rt_spwrite(ser_port, &response_ack, 1);
+  if (num_not_written == 1) state = READY;
+  else state = SENDING_RESPONSE_BEGIN_ACK;
+}
+
+static void read_response_payload() {
+  int num_not_written;
+  u16 crc;
+  union {
+    u16 word;
+    u8 bytes[2];
+  } recv_crc;
+  
+  rt_spread(ser_port, inbound_payload, inbound_payload_len);
+  memcpy(recv_crc.bytes, inbound_payload + inbound_payload_len - 2, 2);
+  
+  crc = crc_byte(0, inbound_payload[0]);
+  crc = crc_data(crc, inbound_payload + 1, inbound_payload_len - 3);
+  response_ack = crc == __le16_to_cpu(recv_crc.word) ? 'O' : 'F';
+  
+  num_not_written = rt_spwrite(ser_port, &response_ack, 1);
+  if (num_not_written == 1) state = READY;
+  else state = SENDING_RESPONSE_END_ACK;
 }
 
 static write_status_t write_object(u16 index,u8 subindex,
@@ -266,21 +300,22 @@ static write_status_t write_object(u16 index,u8 subindex,
   memcpy(outbound_payload + 5, data_union.bytes, 4);
 
   //Calculate the CRC
-  crc.word = crc_word(0, ((u16)opcode << 8) + (u16)len_m1);
+  crc.word = crc_byte(0, opcode);
+  crc.word = crc_byte(crc.word, len_m1);
   crc.word = __cpu_to_le16(crc_data(crc.word, outbound_payload+1, 8));
 
   //Append the CRC to the end of the packet
   memcpy(outbound_payload + 9, crc.bytes, 2);
 
   outbound_payload_len = 11;
-  has_response = 0;
+  inbound_payload_len = 7;
   
   return SUCCESS;
 }
 
 static void debug() {
   write_status_t st = write_object(0x6040,0,0,0xF);//Enable operation
-  //write_status_t st = write_object(0x6060,0,0,0xFE);//mode of operation: velocity
+  //write_status_t st = write_object(0x6060,0,0,0xFE);//mode of oper: velocity
 }
 
 /**
@@ -290,33 +325,30 @@ static void debug() {
  * algorithm (for which there is a standard kernel module) cannot be used.
  */
 
-/**
- * This function is adapted from the epos communication guide manual.
- */
-static u16 crc_word(u16 crc, u16 data) {
-  u16 carry;
-  u16 shifter = 0x8000; //Initialize bitX to bit15
+static u16 crc_byte(u16 crc, u8 data) {
+  int i;
+  crc ^= (u16)data << 8;
   
-  do {
-    carry = crc & 0x8000;      //Check if bit15 of CRC is set
-    crc <<= 1;                 //crc = crc * 2
-    if(data & shifter) crc++;  //crc = crc + 1, if bitX is set in the data
-    if(carry) crc ^= 0x1021;   //crc = crc xor G(x), if carry is true
-    shifter >>= 1;             //Set bitX to next lower bit (divide by 2)
-  } while (shifter);
+  for (i = 0; i < 8; i++)
+    if (crc & 0x8000)
+      crc = (crc << 1) ^ 0x1021;
+    else
+      crc <<= 1;
   
   return crc;
 }
 
 static u16 crc_data(u16 crc, u8* data, int len) {
-  u16 curr_word;
+  u8 low_byte, high_byte;
   
   len -= (len % 2); //For safety.
+  
   while (len > 0) {
-    curr_word = *data++;
-    curr_word += ((u16) *data++) << 8;
+    low_byte  = *data++;
+    high_byte = *data++;
 
-    crc = crc_word(crc, curr_word);
+    crc = crc_byte(crc, high_byte);
+    crc = crc_byte(crc, low_byte);
     
     len -= 2;
   }
