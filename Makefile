@@ -18,7 +18,7 @@ INCLUDE = -I$(RT_KERNEL)/include -I$(RTAI)/include
 VPATH = ./src:./include:./object
 
 ########################################################################################
-all : save_data ioSockets fdc_master fdc_cmd_parser rtai_gps rtai_daq rtai_ahrs rtai_nav rtai_pitot fdc_slave object/epos.o
+all : save_data ioSockets fdc_master fdc_cmd_parser rtai_gps rtai_daq rtai_ahrs rtai_nav rtai_pitot fdc_slave object/epos.o object/epos_debug.o
 
 ## Thread de salvamento dos dados
 save_data : save_data.c save_data.h messages.h fdc_structs.h
@@ -112,6 +112,9 @@ fdc_slave: fdc_slave.c fdc_slave.h messages.h rtai_crc.h rtai_rt_serial.h rtai_d
 	
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.c $(INCLUDEDIR)/%.h
+	$(CC) $(MFLAGS) $(INCLUDE) -c $< -o $@
+
+$(OBJDIR)/epos_debug.o: $(SRCDIR)/epos_debug.c
 	$(CC) $(MFLAGS) $(INCLUDE) -c $< -o $@
 
 ########################################################################################	

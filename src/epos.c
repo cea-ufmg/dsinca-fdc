@@ -114,8 +114,6 @@ static void read_response_payload();
 static u16 crc_byte(u16,u8);
 static u16 crc_data(u16,u8*,int);
 
-static void debug();
-
 static int __init epos_init() {
   int err;
   
@@ -139,8 +137,6 @@ static int __init epos_init() {
     errmsg("Invalid parameters for setting serial port callback.");
     goto spset_callback_fail;
   }
-
-  debug();
   
   return 0;
 
@@ -313,11 +309,6 @@ static write_status_t write_object(u16 index,u8 subindex,
   return SUCCESS;
 }
 
-static void debug() {
-  write_status_t st = write_object(0x6040,0,0,0xF);//Enable operation
-  //write_status_t st = write_object(0x6060,0,0,0xFE);//mode of oper: velocity
-}
-
 /**
  * The code below calculates the CRC of the message as expected by the EPOS. In
  * the manual they said the crc-ccitt algorithm is used but the code and
@@ -354,4 +345,13 @@ static u16 crc_data(u16 crc, u8* data, int len) {
   }
 
   return crc;
+}
+
+/** Debug stuff **/
+char *dresponse_ack = &response_ack;
+char *dinbound_payload = inbound_payload;
+int *dinbound_payload_len = &inbound_payload_len;
+
+void dwrite_object(u16 index,u8 subindex, u8 nodeid, u32 data) {
+  write_status_t st = write_object(index, subindex, nodeid, data);
 }
