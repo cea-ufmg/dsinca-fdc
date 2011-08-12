@@ -1,5 +1,5 @@
 /*
-	epos.c - Maxxon motor EPOS real time device driver (module)
+        epos.c - Maxxon motor EPOS real time device driver (module)
     Copyright (C) 2011  Dimas Abreu Dutra - dimasadutra@gmail.com
 
     This program is free software: you can redistribute it and/or modify
@@ -28,6 +28,9 @@
  * this error during initialization. Since the module will not initialize if
  * the serial port number is invalid, that error will be treated in the other
  * functions as an "unexpected error".
+ *
+ * In the module code we refer as payload to everything in the message after
+ * the opcode. That includes the length and crc fields.
  */
 
 #include "epos.h"
@@ -70,7 +73,9 @@ MODULE_PARM_DESC (baud, "The baud rate. Integer value (default 38400)");
 
 //OPCODES
 enum {
-  OPCODE_RESPONSE = 0x00
+  OPCODE_RESPONSE = 0x00,
+  OPCODE_READ_OBJECT = 0x10,
+  OPCODE_WRITE_OBJECT = 0x11
 };
   
 /** Driver state machine codes **/
@@ -78,21 +83,13 @@ typedef enum {
   READY,
   SENDING_OPCODE,
   WAITING_BEGIN_ACK,
-  SENDING_DATA,
+  SENDING_PAYLOAD,
   WAITING_END_ACK,
   WAITING_RESPONSE_OPCODE,
   SENDING_RESPONSE_BEGIN_ACK,
-  WAITING_RESPONSE_DATA,
+  WAITING_RESPONSE_PAYLOAD,
   SENDING_RESPONSE_END_ACK
 } driver_state_t;
-
-/** Return codes **/
-typedef enum {
-  SUCCESS,
-  SERIAL_BUF_FULL,
-  DRIVER_BUSY,
-  UNEXPECTED_ERROR
-} write_status_t;
 
 /** Driver variables **/
 static driver_state_t state;
@@ -105,12 +102,17 @@ static int inbound_payload_len;
 static char response_ack;
 
 /** Declare the internal functions **/
-static write_status_t send_opcode(char opcode);
+static epos_status_t send_opcode(char opcode);
 static void read_begin_ack();
 static void read_end_ack();
 static void send_payload();
 static void read_response_opcode();
 static void read_response_payload();
+static void set_outbound_len_crc(u8, u8);
+static void set_outdata_word(int,u16);
+static void set_outdata_bytes(int,u8,u8);
+static void read_indata_bytes(int,u8*,u8*);
+static u16 read_indata_word(int);
 static u16 crc_byte(u16,u8);
 static u16 crc_data(u16,u8*,int);
 
@@ -165,7 +167,7 @@ static void serial_callback(int rxavail, int txfree) {
   case WAITING_BEGIN_ACK:
     if (rxavail >= 1) read_begin_ack();
     break;
-  case SENDING_DATA:
+  case SENDING_PAYLOAD:
     if (txfree == MAX_PAYLOAD) state = WAITING_END_ACK; //data was sent
     //intentional fall-through again, same reasons
   case WAITING_END_ACK:
@@ -176,8 +178,8 @@ static void serial_callback(int rxavail, int txfree) {
     break;
   case SENDING_RESPONSE_BEGIN_ACK:
     if (txfree == MAX_PAYLOAD)
-      state = response_ack == 'O' ? WAITING_RESPONSE_DATA : READY;
-  case WAITING_RESPONSE_DATA:
+      state = response_ack == 'O' ? WAITING_RESPONSE_PAYLOAD : READY;
+  case WAITING_RESPONSE_PAYLOAD:
     if (rxavail >= inbound_payload_len) read_response_payload();
     break;
   case SENDING_RESPONSE_END_ACK:
@@ -186,20 +188,16 @@ static void serial_callback(int rxavail, int txfree) {
   }
 }
 
-static void errmsg(char* msg){
-  printk("EPOS driver: %s\n",msg);
-}
-
-static write_status_t send_opcode(char opcode) {
+static epos_status_t send_opcode(char opcode) {
   int num_not_written = rt_spwrite(ser_port, &opcode, 1);
 
   switch (num_not_written) {
   case 0:
     state = SENDING_OPCODE;
-    return SUCCESS;
-  case 1: return SERIAL_BUF_FULL;
+    return EPOS_SUCCESS;
+  case 1: return EPOS_SERIAL_BUF_FULL;
     //The default will run if rt_spwrite returns -ENODEV.
-  default: return UNEXPECTED_ERROR;
+  default: return EPOS_UNEXPECTED_ERROR;
   }
 }
 
@@ -230,7 +228,7 @@ static void send_payload() {
   num_not_written = rt_spwrite(ser_port, outbound_payload,
 			       -outbound_payload_len);
   if (num_not_written != 0) state = READY;
-  else state = SENDING_DATA;
+  else state = SENDING_PAYLOAD;
 }
 
 static void read_response_opcode() {
@@ -265,51 +263,106 @@ static void read_response_payload() {
   else state = SENDING_RESPONSE_END_ACK;
 }
 
-static write_status_t write_object(u16 index,u8 subindex,
-				   u8 nodeid, u32 data) {
-  union {
-    u16 word;
-    u8 bytes[2];
-  } index_union = {__cpu_to_le16(index)};
+epos_status_t epos_write_object(u16 index, u8 subindex, u8 nodeid, u32 data) {
   union {
     u32 dword;
-    u8 bytes[4];
+    u16 words[2];
   } data_union = {__cpu_to_le32(data)};
-  u8 opcode = 0x11;
-  u8 len_m1 = 3;//data length - 1
-  union {
-    u16 word;
-    u8 bytes[2];
-  } crc;
-  write_status_t stat;
+  epos_status_t stat;
   
-  if (state != READY) return DRIVER_BUSY;
+  if (state != READY) return EPOS_DRIVER_BUSY;
 
-  stat = send_opcode(opcode);
-  if (stat != SUCCESS) return stat;
+  stat = send_opcode(OPCODE_WRITE_OBJECT);
+  if (stat != EPOS_SUCCESS) return stat;
 
   //Fill out the payload
-  outbound_payload[0] = len_m1;
-  memcpy(outbound_payload +1, index_union.bytes, 2);
-  outbound_payload[3] = subindex;
-  outbound_payload[4] = nodeid;
-  memcpy(outbound_payload + 5, data_union.bytes, 4);
-
-  //Calculate the CRC
-  crc.word = crc_byte(0, opcode);
-  crc.word = crc_byte(crc.word, len_m1);
-  crc.word = __cpu_to_le16(crc_data(crc.word, outbound_payload+1, 8));
-
-  //Append the CRC to the end of the packet
-  memcpy(outbound_payload + 9, crc.bytes, 2);
-
-  outbound_payload_len = 11;
+  set_outdata_word (0, index);
+  set_outdata_bytes(1, subindex, nodeid);
+  set_outdata_word (2, data_union.words[0]);
+  set_outdata_word (3, data_union.words[1]);
+  set_outbound_len_crc(OPCODE_WRITE_OBJECT, 4);
+  
   inbound_payload_len = 7;
   
-  return SUCCESS;
+  return EPOS_SUCCESS;
+}
+
+epos_status_t epos_read_object(u16 index,u8 subindex, u8 nodeid) {
+  epos_status_t stat;
+  
+  if (state != READY) return EPOS_DRIVER_BUSY;
+
+  stat = send_opcode(OPCODE_READ_OBJECT);
+  if (stat != EPOS_SUCCESS) return stat;
+
+  //Fill out the payload
+  set_outdata_word (0, index);
+  set_outdata_bytes(1, subindex, nodeid);
+  set_outbound_len_crc(OPCODE_READ_OBJECT, 2);
+  
+  inbound_payload_len = 11;
+  
+  return EPOS_SUCCESS;
+}
+
+static void set_outbound_len_crc(u8 opcode, u8 data_word_length) {
+  u16 crc;
+  u8 len_m1 = data_word_length - 1;
+  
+  outbound_payload_len = data_word_length*2 + 3;
+  outbound_payload[0] = len_m1;
+
+  crc = crc_byte(0, opcode);
+  crc = crc_byte(crc, len_m1);
+  crc = __cpu_to_le16(crc_data(crc, outbound_payload+1, data_word_length*2));
+
+  set_outdata_word(data_word_length, crc);
 }
 
 /**
+ * @brief Sets outbound message data word.
+ *
+ * Input is set on the appropriate field of the outbound_message_payload 
+ * variable.
+ *
+ * @param windex Index of the data word to set.
+ * @param value  Value the word is set to.
+ */
+static void set_outdata_word(int windex, u16 data) {
+  union {
+    u16 word;
+    u8 bytes[2];
+  } data_union = {__cpu_to_le16(data)};
+  int payload_index = windex*2 + 1;
+  
+  memcpy(outbound_payload + payload_index, data_union.bytes, 2);
+}
+
+/**
+ * @brief Sets high and low bytes of an outbound message data word.
+ *
+ * Input is set on the appropriate field of the outbound_message_payload 
+ * variable.
+ *
+ * @param windex    Index of the data word to set.
+ * @param low_byte  Value the low byte of the word will be set to.
+ * @param high_byte Value the high byte of the word will be set to.
+ */
+static void set_outdata_bytes(int windex, u8 low_byte, u8 high_byte) {
+  int payload_index = windex*2 + 1;
+  
+  outbound_payload[payload_index    ] = low_byte;
+  outbound_payload[payload_index + 1] = high_byte;
+}
+
+static void read_indata_bytes(int windex, u8 *high_byte, u8 *low_byte) {
+  //TODO
+}
+static u16 read_indata_word(int windex) {
+  return 0;//TODO
+}
+
+/*
  * The code below calculates the CRC of the message as expected by the EPOS. In
  * the manual they said the crc-ccitt algorithm is used but the code and
  * examples provided show that actually the XMODEM variety is used so the kermit
@@ -347,11 +400,13 @@ static u16 crc_data(u16 crc, u8* data, int len) {
   return crc;
 }
 
+static void errmsg(char* msg){
+  printk("EPOS driver: %s\n",msg);
+}
+
 /** Debug stuff **/
 char *dresponse_ack = &response_ack;
 char *dinbound_payload = inbound_payload;
 int *dinbound_payload_len = &inbound_payload_len;
-
-void dwrite_object(u16 index,u8 subindex, u8 nodeid, u32 data) {
-  write_status_t st = write_object(index, subindex, nodeid, data);
-}
+char *doutbound_payload = outbound_payload;
+int *doutbound_payload_len = &outbound_payload_len;

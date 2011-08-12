@@ -1,5 +1,5 @@
 /*
-	epos.c - Maxxon motor EPOS module header
+        epos.c - Maxxon motor EPOS module header
     Copyright (C) 2011  Dimas Abreu Dutra - dimasadutra@gmail.com
 
     This program is free software: you can redistribute it and/or modify
@@ -17,6 +17,18 @@
 */
 
 #ifndef EPOS_H
+
+#include <linux/types.h>
+
+typedef enum {
+  EPOS_SUCCESS,
+  EPOS_SERIAL_BUF_FULL,
+  EPOS_DRIVER_BUSY,
+  EPOS_UNEXPECTED_ERROR
+} epos_status_t;
+
+epos_status_t epos_write_object(u16 index, u8 subindex, u8 nodeid, u32 data);
+epos_status_t epos_read_object(u16 index, u8 subindex, u8 nodeid);
 #define EPOS_H
 
 
