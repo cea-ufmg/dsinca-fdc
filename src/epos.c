@@ -40,6 +40,7 @@
 #include <linux/kernel.h>
 #include <linux/types.h>
 
+#include <rtai_sem.h>
 #include <rtai_serial.h>
 
 static void errmsg(char * msg);
@@ -69,7 +70,7 @@ MODULE_PARM_DESC (baud, "The baud rate. Integer value (default 38400)");
 #define FIFOTRIG RT_SP_FIFO_SIZE_1
 
 //Packet parameters
-#define MAX_PAYLOAD 512 //This should not exceed SERIAL_FIFO_SIZE
+#define MAX_PAYLOAD 40 //This should not exceed SERIAL_FIFO_SIZE
 
 //OPCODES
 enum {
@@ -77,7 +78,10 @@ enum {
   OPCODE_READ_OBJECT = 0x10,
   OPCODE_WRITE_OBJECT = 0x11
 };
-  
+
+//Semaphore state
+#define INVALID_SEMAPHORE 0xFFFF
+
 /** Driver state machine codes **/
 typedef enum {
   READY,
@@ -93,16 +97,19 @@ typedef enum {
 
 /** Driver variables **/
 static driver_state_t state;
+
+static int tx_buffer_size;
 static char outbound_payload[MAX_PAYLOAD];
 static char inbound_payload[MAX_PAYLOAD];
-
 static int outbound_payload_len;
 static int inbound_payload_len;
-
 static char response_ack;
 
+static SEM mutex;
+
+
 /** Declare the internal functions **/
-static epos_status_t send_opcode(char opcode);
+static int send_opcode(char opcode);
 static void read_begin_ack();
 static void read_end_ack();
 static void send_payload();
@@ -116,6 +123,11 @@ static u16 read_indata_word(int);
 static u16 crc_byte(u16,u8);
 static u16 crc_data(u16,u8*,int);
 
+
+/** Some useful macros **/
+#define TRANSMISSION_DONE(txfree) (txfree >= tx_buffer_size)
+
+/** Module code **/
 static int __init epos_init() {
   int err;
   
@@ -139,6 +151,10 @@ static int __init epos_init() {
     errmsg("Invalid parameters for setting serial port callback.");
     goto spset_callback_fail;
   }
+
+  tx_buffer_size = rt_spget_txfrbs(ser_port);
+  
+  rt_sem_init(&mutex, 1);
   
   return 0;
 
@@ -148,10 +164,16 @@ static int __init epos_init() {
 
 static void __exit epos_cleanup() {
   int err;
+
+  //Acquire mutex
+  rt_sem_wait(&mutex);
   
   err = rt_spclose(ser_port);
   if (err == -ENODEV)
     errmsg("Error closing serial: rtai_serial claims port does not exist.");
+
+  //Invalidate mutex
+  rt_sem_delete(&mutex);
 }
 
 module_init(epos_init);
@@ -159,16 +181,17 @@ module_exit(epos_cleanup);
 
 static void serial_callback(int rxavail, int txfree) {
   switch (state) {
-  case READY: errmsg("READY"); return;
+  case READY: return;
   case SENDING_OPCODE:
-    if (txfree == MAX_PAYLOAD) state = WAITING_BEGIN_ACK; //opcode was sent    
+    if (TRANSMISSION_DONE(txfree)) //opcode was sent
+      state = WAITING_BEGIN_ACK; 
     //fall-through for the case the end of transmission and response reception
     //are handled by the same callback
   case WAITING_BEGIN_ACK:
     if (rxavail >= 1) read_begin_ack();
     break;
   case SENDING_PAYLOAD:
-    if (txfree == MAX_PAYLOAD) state = WAITING_END_ACK; //data was sent
+    if (TRANSMISSION_DONE(txfree)) state = WAITING_END_ACK; //data was sent
     //intentional fall-through again, same reasons
   case WAITING_END_ACK:
     if (rxavail >= 1) read_end_ack();
@@ -177,27 +200,32 @@ static void serial_callback(int rxavail, int txfree) {
     if (rxavail >= 1) read_response_opcode();
     break;
   case SENDING_RESPONSE_BEGIN_ACK:
-    if (txfree == MAX_PAYLOAD)
+    if (TRANSMISSION_DONE(txfree))
       state = response_ack == 'O' ? WAITING_RESPONSE_PAYLOAD : READY;
   case WAITING_RESPONSE_PAYLOAD:
     if (rxavail >= inbound_payload_len) read_response_payload();
     break;
   case SENDING_RESPONSE_END_ACK:
-    if (txfree == MAX_PAYLOAD) state = READY;
+    if (TRANSMISSION_DONE(txfree)) state = READY;
     break;    
   }
 }
 
-static epos_status_t send_opcode(char opcode) {
+/**
+ * @brief Sends message opcode to the EPOS.
+ * @returns 0 if success, -ENOBUFS if send buffer is full, -ENODEV if serial
+ * port is invalid.
+ */
+static int send_opcode(char opcode) {
   int num_not_written = rt_spwrite(ser_port, &opcode, 1);
 
   switch (num_not_written) {
   case 0:
     state = SENDING_OPCODE;
-    return EPOS_SUCCESS;
-  case 1: return EPOS_SERIAL_BUF_FULL;
-    //The default will run if rt_spwrite returns -ENODEV.
-  default: return EPOS_UNEXPECTED_ERROR;
+    return 0;
+  case 1: return -ENOBUFS;
+  case -ENODEV: return -ENODEV;
+  default: return -1; //This should never occur.
   }
 }
 
@@ -263,46 +291,79 @@ static void read_response_payload() {
   else state = SENDING_RESPONSE_END_ACK;
 }
 
-epos_status_t epos_write_object(u16 index, u8 subindex, u8 nodeid, u32 data) {
+int epos_write_object(u16 index, u8 subindex, u8 nodeid, u32 data) {
   union {
     u32 dword;
     u16 words[2];
-  } data_union = {__cpu_to_le32(data)};
-  epos_status_t stat;
+  } data_union;
+  int stat;
+  int sem_count;
+
+  //Acquire mutex
+  sem_count = rt_sem_wait_if(&mutex);
+  if (sem_count <= 0 || sem_count == INVALID_SEMAPHORE)
+    return -EBUSY;
   
-  if (state != READY) return EPOS_DRIVER_BUSY;
+  if (state != READY) {
+    rt_sem_signal(&mutex); //Release mutex
+    return -EBUSY;
+  }
 
   stat = send_opcode(OPCODE_WRITE_OBJECT);
-  if (stat != EPOS_SUCCESS) return stat;
-
-  //Fill out the payload
+  if (stat != 0) {
+    rt_sem_signal(&mutex); //Release mutex
+    return stat;
+  }
+  
+  //Fill out the outbound payload
+  data_union.dword = __cpu_to_le32(data);
+  
   set_outdata_word (0, index);
   set_outdata_bytes(1, subindex, nodeid);
   set_outdata_word (2, data_union.words[0]);
   set_outdata_word (3, data_union.words[1]);
   set_outbound_len_crc(OPCODE_WRITE_OBJECT, 4);
-  
+
+  //Define the answer length
   inbound_payload_len = 7;
   
-  return EPOS_SUCCESS;
+  //Release mutex
+  rt_sem_signal(&mutex);
+  
+  return 0;
 }
 
-epos_status_t epos_read_object(u16 index,u8 subindex, u8 nodeid) {
-  epos_status_t stat;
+int epos_read_object(u16 index, u8 subindex, u8 nodeid) {
+  int stat;
+  int sem_count;
+
+  //Acquire mutex
+  sem_count = rt_sem_wait_if(&mutex);
+  if (sem_count <= 0 || sem_count == INVALID_SEMAPHORE) return -EBUSY;
   
-  if (state != READY) return EPOS_DRIVER_BUSY;
-
+  if (state != READY) {
+    rt_sem_signal(&mutex); //Release mutex
+    return -EBUSY;
+  }
+  
   stat = send_opcode(OPCODE_READ_OBJECT);
-  if (stat != EPOS_SUCCESS) return stat;
-
-  //Fill out the payload
+  if (stat != 0) {
+    rt_sem_signal(&mutex); //Release mutex
+    return stat;
+  }
+  
+  //Fill out the outbound payload
   set_outdata_word (0, index);
   set_outdata_bytes(1, subindex, nodeid);
   set_outbound_len_crc(OPCODE_READ_OBJECT, 2);
-  
+
+  //Define the answer length
   inbound_payload_len = 11;
+
+  //Release mutex
+  rt_sem_signal(&mutex);
   
-  return EPOS_SUCCESS;
+  return 0;
 }
 
 static void set_outbound_len_crc(u8 opcode, u8 data_word_length) {

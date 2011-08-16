@@ -20,15 +20,9 @@
 
 #include <linux/types.h>
 
-typedef enum {
-  EPOS_SUCCESS,
-  EPOS_SERIAL_BUF_FULL,
-  EPOS_DRIVER_BUSY,
-  EPOS_UNEXPECTED_ERROR
-} epos_status_t;
+int epos_write_object(u16 index, u8 subindex, u8 nodeid, u32 data);
+int epos_read_object(u16 index, u8 subindex, u8 nodeid);
 
-epos_status_t epos_write_object(u16 index, u8 subindex, u8 nodeid, u32 data);
-epos_status_t epos_read_object(u16 index, u8 subindex, u8 nodeid);
 #define EPOS_H
 
 
