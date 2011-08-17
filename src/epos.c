@@ -39,6 +39,7 @@
 #include <linux/init.h>
 #include <linux/kernel.h>
 #include <linux/types.h>
+#include <linux/timer.h>
 
 #include <rtai_sem.h>
 #include <rtai_serial.h>
@@ -59,6 +60,11 @@ MODULE_PARM_DESC (ser_port, "The rtai_serial serial port number. "
 static int baud = 38400;
 MODULE_PARM (baud, "i");
 MODULE_PARM_DESC (baud, "The baud rate. Integer value (default 38400)");
+
+static int timeout = 500;
+MODULE_PARM (timeout, "i");
+MODULE_PARM_DESC (timeout, "The communication timeout, in miliseconds. "
+		  "Integer value (default 500)");
 
 /** Module definitions **/
 //Serial communication parameters
@@ -106,6 +112,7 @@ static int inbound_payload_len;
 static char response_ack;
 
 static SEM mutex;
+struct timer_list timeout_timer;
 
 
 /** Declare the internal functions **/
@@ -115,17 +122,28 @@ static void read_end_ack();
 static void send_payload();
 static void read_response_opcode();
 static void read_response_payload();
+static void timeout_function(unsigned long);
+static void comm_error();
+static void comm_done();
 static void set_outbound_len_crc(u8, u8);
 static void set_outdata_word(int,u16);
+static void set_outdata_dword(int,u32);
 static void set_outdata_bytes(int,u8,u8);
 static void read_indata_bytes(int,u8*,u8*);
 static u16 read_indata_word(int);
 static u16 crc_byte(u16,u8);
 static u16 crc_data(u16,u8*,int);
 
-
-/** Some useful macros **/
+/** Some useful macros and inline functions **/
 #define TRANSMISSION_DONE(txfree) (txfree >= tx_buffer_size)
+static inline void fire_timeout() {
+  timeout_timer.expires = jiffies + HZ*timeout/1000;
+  add_timer(&timeout_timer);
+}
+
+static inline void move_timeout() {
+  mod_timer(&timeout_timer, jiffies + HZ*timeout/1000);
+}
 
 /** Module code **/
 static int __init epos_init() {
@@ -153,9 +171,13 @@ static int __init epos_init() {
   }
 
   tx_buffer_size = rt_spget_txfrbs(ser_port);
-  
+
+  //Initialize data structures
   rt_sem_init(&mutex, 1);
-  
+
+  init_timer(&timeout_timer);
+  timeout_timer.function = &timeout_function;
+
   return 0;
 
  spset_callback_fail: rt_spclose(ser_port);
@@ -200,13 +222,17 @@ static void serial_callback(int rxavail, int txfree) {
     if (rxavail >= 1) read_response_opcode();
     break;
   case SENDING_RESPONSE_BEGIN_ACK:
-    if (TRANSMISSION_DONE(txfree))
-      state = response_ack == 'O' ? WAITING_RESPONSE_PAYLOAD : READY;
+    if (TRANSMISSION_DONE(txfree)) {
+      if (response_ack == 'O')
+	state = WAITING_RESPONSE_PAYLOAD;
+      else comm_error();
+    }
+    //intentional fall-through again, same reasons
   case WAITING_RESPONSE_PAYLOAD:
     if (rxavail >= inbound_payload_len) read_response_payload();
     break;
   case SENDING_RESPONSE_END_ACK:
-    if (TRANSMISSION_DONE(txfree)) state = READY;
+    if (TRANSMISSION_DONE(txfree)) comm_done();
     break;    
   }
 }
@@ -217,6 +243,9 @@ static void serial_callback(int rxavail, int txfree) {
  * port is invalid.
  */
 static int send_opcode(char opcode) {
+  rt_spclear_rx(ser_port);
+  rt_spclear_tx(ser_port);
+  
   int num_not_written = rt_spwrite(ser_port, &opcode, 1);
 
   switch (num_not_written) {
@@ -236,39 +265,44 @@ static void read_begin_ack() {
   if (ack == 'O') //Okay
     send_payload();
   else //Fail
-    state = READY;
+    comm_error();
 }
 
 static void read_end_ack() {
   char ack;
   rt_spread(ser_port, &ack, 1);
   
-  if (ack == 'O' && inbound_payload_len > 0) //Okay
+  if (ack == 'O' && inbound_payload_len > 0) {//Okay
+    move_timeout();
     state = WAITING_RESPONSE_OPCODE;
-  else
-    state = READY;
+  } else comm_error();
 }
 
 static void send_payload() {
   int num_not_written;
+
+  move_timeout();
   
   rt_spset_thrs(ser_port, 1, outbound_payload_len);
   num_not_written = rt_spwrite(ser_port, outbound_payload,
 			       -outbound_payload_len);
-  if (num_not_written != 0) state = READY;
+  if (num_not_written != 0) comm_error();
   else state = SENDING_PAYLOAD;
 }
 
 static void read_response_opcode() {
   int num_not_written;
   char opcode;
-  
+
   rt_spread(ser_port, &opcode, 1);
   response_ack = opcode == OPCODE_RESPONSE ? 'O' : 'F';
   
   num_not_written = rt_spwrite(ser_port, &response_ack, 1);
-  if (num_not_written == 1) state = READY;
-  else state = SENDING_RESPONSE_BEGIN_ACK;
+  if (num_not_written == 1) comm_error();
+  else {
+    move_timeout();
+    state = SENDING_RESPONSE_BEGIN_ACK;
+  }
 }
 
 static void read_response_payload() {
@@ -287,15 +321,34 @@ static void read_response_payload() {
   response_ack = crc == __le16_to_cpu(recv_crc.word) ? 'O' : 'F';
   
   num_not_written = rt_spwrite(ser_port, &response_ack, 1);
-  if (num_not_written == 1) state = READY;
-  else state = SENDING_RESPONSE_END_ACK;
+  if (num_not_written == 1) comm_error();
+  else {
+    move_timeout();
+    state = SENDING_RESPONSE_END_ACK;
+  }
+}
+
+static void timeout_function(unsigned long unused) {
+  errmsg("Communication timeout.");
+  state = READY;
+}
+
+/* comm_error and comm_done both exist, even though they do the same thing
+ * (for now, at least) because if some special task or return value is needed to
+ * differentiate them in the future, their calls are separate.
+ */
+
+static void comm_error() {
+  del_timer(&timeout_timer);
+  state = READY;
+}
+
+static void comm_done() {
+  del_timer(&timeout_timer);
+  state = READY;
 }
 
 int epos_write_object(u16 index, u8 subindex, u8 nodeid, u32 data) {
-  union {
-    u32 dword;
-    u16 words[2];
-  } data_union;
   int stat;
   int sem_count;
 
@@ -314,14 +367,13 @@ int epos_write_object(u16 index, u8 subindex, u8 nodeid, u32 data) {
     rt_sem_signal(&mutex); //Release mutex
     return stat;
   }
+
+  fire_timeout();
   
   //Fill out the outbound payload
-  data_union.dword = __cpu_to_le32(data);
-  
   set_outdata_word (0, index);
   set_outdata_bytes(1, subindex, nodeid);
-  set_outdata_word (2, data_union.words[0]);
-  set_outdata_word (3, data_union.words[1]);
+  set_outdata_dword(2, data);
   set_outbound_len_crc(OPCODE_WRITE_OBJECT, 4);
 
   //Define the answer length
@@ -351,6 +403,8 @@ int epos_read_object(u16 index, u8 subindex, u8 nodeid) {
     rt_sem_signal(&mutex); //Release mutex
     return stat;
   }
+
+  fire_timeout();
   
   //Fill out the outbound payload
   set_outdata_word (0, index);
@@ -397,6 +451,25 @@ static void set_outdata_word(int windex, u16 data) {
   int payload_index = windex*2 + 1;
   
   memcpy(outbound_payload + payload_index, data_union.bytes, 2);
+}
+
+/**
+ * @brief Sets outbound message data double word.
+ *
+ * Input is set on the appropriate field of the outbound_message_payload 
+ * variable.
+ *
+ * @param windex Index of the data word to set.
+ * @param value  Value the double word is set to.
+ */
+static void set_outdata_dword(int windex, u32 data) {
+  union {
+    u32 dword;
+    u8 bytes[4];
+  } data_union = {__cpu_to_le32(data)};
+  int payload_index = windex*2 + 1;
+  
+  memcpy(outbound_payload + payload_index, data_union.bytes, 4);
 }
 
 /**
