@@ -1,5 +1,5 @@
 /*
-        epos.c - Maxxon motor EPOS real time device driver (module)
+        epos.c - Maxon motor EPOS real time device driver (module)
     Copyright (C) 2011  Dimas Abreu Dutra - dimasadutra@gmail.com
 
     This program is free software: you can redistribute it and/or modify
@@ -17,20 +17,21 @@
 */
 
 /* 
- * This is the Maxxon motor EPOS real time device driver for RTAI linux.
+ * This is the Maxon motor EPOS real time device driver for RTAI linux.
  * It was tested with the EPOS 70/10, hardware version 6410h, firmware version
  * 2033h. The target RTAI version is 3.2, Linux kernel 2.4.
  *
- * Some general info on the code: the rtai_serial module can return ENODEV in
+ * Some general info on the code: the rtai_serial module can return -ENODEV in
  * in pretty much every function it has. That should only happen if the serial
  * we are requesting does not exist (was not registered) in the driver. Since
  * our module opens the serial device in the module_init it will only treat
- * this error during initialization. Since the module will not initialize if
- * the serial port number is invalid, that error will be treated in the other
- * functions as an "unexpected error".
+ * this error during initialization, and will not initialize if the port number
+ * is invalid. If any -ENODEV is encountered from a serial port function it will
+ * be returned upwards, but it theoretically should never happen.
  *
  * In the module code we refer as payload to everything in the message after
- * the opcode. That includes the length and crc fields.
+ * the opcode. That includes the length and crc fields. Data is the stuff from
+ * after the len until before the crc.
  */
 
 #include "epos.h"
@@ -48,7 +49,7 @@ static void errmsg(char * msg);
 static void serial_callback(int rxavail,int txfree);
 
 MODULE_AUTHOR("Dimas Abreu Dutra");
-MODULE_DESCRIPTION("Real time device driver of Maxxon motor EPOS");
+MODULE_DESCRIPTION("Real time device driver of Maxon motor EPOS");
 MODULE_LICENSE("GPL");
 
 /** Module parameters **/

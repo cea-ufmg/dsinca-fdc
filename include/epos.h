@@ -1,5 +1,5 @@
 /*
-        epos.c - Maxxon motor EPOS module header
+        epos.c - Maxon motor EPOS module header
     Copyright (C) 2011  Dimas Abreu Dutra - dimasadutra@gmail.com
 
     This program is free software: you can redistribute it and/or modify
@@ -20,8 +20,79 @@
 
 #include <linux/types.h>
 
+/**
+ * @brief Write to the EPOS object dictionary.
+ *
+ * It is a non-blocking function call.
+ *
+ * @returns 0 if success, -EBUSY if the driver is already in an operation,
+ * -ENOBUFS if the serial port write buffer has no space, -ENODEV if the serial
+ * port number is not recognized by the rtai_serial module.
+ */
 int epos_write_object(u16 index, u8 subindex, u8 nodeid, u32 data);
+
+/**
+ * @brief Send a request to read from the EPOS object dictionary.
+ *
+ * It is a non-blocking function call.
+ *
+ * @returns 0 if success, -EBUSY if the driver is already in an operation,
+ * -ENOBUFS if the serial port write buffer has no space, -ENODEV if the serial
+ * port number is not recognized by the rtai_serial module.
+ */
 int epos_read_object(u16 index, u8 subindex, u8 nodeid);
+
+enum {
+  EPOS_CONTROL_WORD_INDEX=0x6040,
+  EPOS_MODES_OPERATION_INDEX=0x6060,
+  EPOS_VELOCITY_MODE_SP_INDEX=0x206B
+} epos_obj_index_t;
+
+enum {
+  EPOS_FAULT_RESET_CMD=0x80,
+  EPOS_SHUTDOWN_CMD=0x06,
+  EPOS_SWITCH_ON_CMD=0x07,
+  EPOS_ENABLE_OPERATION_CMD=0x0F
+} epos_commands_t;
+
+/* Inline function helpers for some common operations */
+
+inline int epos_fault_reset(u8 nodeid){
+  return epos_write_object(EPOS_CONTROL_WORD_INDEX, 0,
+			   nodeid, EPOS_FAULT_RESET_CMD);
+}
+
+inline int epos_shutdown(u8 nodeid){
+  return epos_write_object(EPOS_CONTROL_WORD_INDEX, 0,
+			   nodeid, EPOS_SHUTDOWN_CMD);
+}
+
+inline int epos_switch_on(u8 nodeid){
+  return epos_write_object(EPOS_CONTROL_WORD_INDEX, 0,
+			   nodeid, EPOS_SWITCH_ON_CMD);
+}
+
+inline int epos_enable_operation(u8 nodeid){
+  return epos_write_object(EPOS_CONTROL_WORD_INDEX, 0,
+			   nodeid, EPOS_ENABLE_OPERATION_CMD);
+}
+
+typedef enum {
+  EPOS_HOMING_MODE=0x06,
+  EPOS_PROFILE_VELOCITY_MODE=0x03,
+  EPOS_PROFILE_POSITION_MODE=0x01,
+  EPOS_POSITION_MODE=0xFF,
+  EPOS_VELOCITY_MODE=0xFE,
+  EPOS_CURRENT_MODE=0xFD,
+  EPOS_DIAGNOSTIC_MODE=0xFC,
+  EPOS_MASTER_ENCODER_MODE=0xFB,
+  EPOS_STEP_DIRECTION_MODE=0xFA
+} epos_mode_t;
+
+inline int epos_set_mode(u8 nodeid, epos_mode_t mode) {
+  return epos_write_object(EPOS_MODES_OPERATION_INDEX, 0,
+			   nodeid, mode);
+}
 
 #define EPOS_H
 

@@ -58,24 +58,6 @@ extern int *dinbound_payload_len;
 extern char *doutbound_payload;
 extern int *doutbound_payload_len;
 
-#define CONTROL_WORD_INDEX 0x6040
-#define FAULT_RESET_CMD 0x80
-#define SHUTDOWN_CMD 0x06
-#define SWITCH_ON_CMD 0x07
-#define ENABLE_OPERATION_CMD 0x0F
-
-#define MODES_OPERATION_INDEX 0x6060
-#define HOMING_MODE 0x06
-#define PROFILE_VELOCITY_MODE 0x03
-#define PROFILE_POSITION_MODE 0x01
-#define POSITION_MODE 0xFF
-#define VELOCITY_MODE 0xFE
-#define CURRENT_MODE 0xFD
-#define DIAGNOSTIC_MODE 0xFC
-#define MASTER_ENCODER_MODE 0xFB
-#define STEP_DIRECTION_MODE 0xFA
-
-#define VELOCITY_MODE_SP_INDEX 0x206B
 #define DEFAULT_VELOCITY_SP 1000
 
 static int __init debug_module_init() {
@@ -88,27 +70,28 @@ static int __init debug_module_init() {
     break;
   case 1:
     //Fault reset
-    epos_write_object(CONTROL_WORD_INDEX,0,nodeid,FAULT_RESET_CMD);
+    epos_fault_reset(nodeid);
     break;
   case 2:
     //Shutdown
-    epos_write_object(CONTROL_WORD_INDEX,0,nodeid,SHUTDOWN_CMD);
+    epos_shutdown(nodeid);
     break;
   case 3:
     //Switch on
-    epos_write_object(CONTROL_WORD_INDEX,0,nodeid,SWITCH_ON_CMD);
+    epos_switch_on(nodeid);
     break;
   case 4:
     //Enable operation
-    epos_write_object(CONTROL_WORD_INDEX,0,nodeid,ENABLE_OPERATION_CMD);
+    epos_enable_operation(nodeid);
     break;
   case 5:
     //mode of operation: velocity
-    epos_write_object(MODES_OPERATION_INDEX,0,0,VELOCITY_MODE);
+    epos_set_mode(nodeid, EPOS_VELOCITY_MODE);
     break;
   case 6:
-    //mode of operation: velocity
-    epos_write_object(VELOCITY_MODE_SP_INDEX,0,0,DEFAULT_VELOCITY_SP);
+    //Write default velocity set-point
+    epos_write_object(EPOS_VELOCITY_MODE_SP_INDEX, 0,
+		      nodeid, DEFAULT_VELOCITY_SP);
     break;
   default:
     printk("unknown action %d\n", action);
