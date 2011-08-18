@@ -45,9 +45,6 @@
 #include <rtai_sem.h>
 #include <rtai_serial.h>
 
-static void errmsg(char * msg);
-static void serial_callback(int rxavail,int txfree);
-
 MODULE_AUTHOR("Dimas Abreu Dutra");
 MODULE_DESCRIPTION("Real time device driver of Maxon motor EPOS");
 MODULE_LICENSE("GPL");
@@ -103,6 +100,9 @@ typedef enum {
 } driver_state_t;
 
 /** Driver variables **/
+epos_response_status_t epos_response_status = EPOS_RESPONSE_NONE;
+int epos_num_response_words = 0;
+
 static driver_state_t state;
 
 static int tx_buffer_size;
@@ -114,7 +114,6 @@ static char response_ack;
 
 static SEM mutex;
 struct timer_list timeout_timer;
-
 
 /** Declare the internal functions **/
 static int send_opcode(char opcode);
@@ -130,8 +129,8 @@ static void set_outbound_len_crc(u8, u8);
 static void set_outdata_word(int,u16);
 static void set_outdata_dword(int,u32);
 static void set_outdata_bytes(int,u8,u8);
-static void read_indata_bytes(int,u8*,u8*);
-static u16 read_indata_word(int);
+static void errmsg(char * msg);
+static void serial_callback(int rxavail,int txfree);
 static u16 crc_byte(u16,u8);
 static u16 crc_data(u16,u8*,int);
 
@@ -252,6 +251,7 @@ static int send_opcode(char opcode) {
   switch (num_not_written) {
   case 0:
     state = SENDING_OPCODE;
+    fire_timeout();
     return 0;
   case 1: return -ENOBUFS;
   case -ENODEV: return -ENODEV;
@@ -332,21 +332,19 @@ static void read_response_payload() {
 static void timeout_function(unsigned long unused) {
   errmsg("Communication timeout.");
   state = READY;
+  epos_response_status = EPOS_RESPONSE_ERROR;
 }
-
-/* comm_error and comm_done both exist, even though they do the same thing
- * (for now, at least) because if some special task or return value is needed to
- * differentiate them in the future, their calls are separate.
- */
 
 static void comm_error() {
   del_timer(&timeout_timer);
   state = READY;
+  epos_response_status = EPOS_RESPONSE_ERROR;
 }
 
 static void comm_done() {
   del_timer(&timeout_timer);
   state = READY;
+  epos_response_status = EPOS_RESPONSE_SUCCESS;
 }
 
 int epos_write_object(u16 index, u8 subindex, u8 nodeid, u32 data) {
@@ -362,14 +360,6 @@ int epos_write_object(u16 index, u8 subindex, u8 nodeid, u32 data) {
     rt_sem_signal(&mutex); //Release mutex
     return -EBUSY;
   }
-
-  stat = send_opcode(OPCODE_WRITE_OBJECT);
-  if (stat != 0) {
-    rt_sem_signal(&mutex); //Release mutex
-    return stat;
-  }
-
-  fire_timeout();
   
   //Fill out the outbound payload
   set_outdata_word (0, index);
@@ -377,8 +367,17 @@ int epos_write_object(u16 index, u8 subindex, u8 nodeid, u32 data) {
   set_outdata_dword(2, data);
   set_outbound_len_crc(OPCODE_WRITE_OBJECT, 4);
 
+  //Send the opcode
+  stat = send_opcode(OPCODE_WRITE_OBJECT);
+  if (stat != 0) {
+    rt_sem_signal(&mutex); //Release mutex
+    return stat;
+  }
+  
   //Define the answer length
-  inbound_payload_len = 7;
+  epos_num_response_words = 2;
+  inbound_payload_len = epos_num_response_words*2 + 3;
+  epos_response_status = EPOS_RESPONSE_WAITING;
   
   //Release mutex
   rt_sem_signal(&mutex);
@@ -398,23 +397,24 @@ int epos_read_object(u16 index, u8 subindex, u8 nodeid) {
     rt_sem_signal(&mutex); //Release mutex
     return -EBUSY;
   }
-  
-  stat = send_opcode(OPCODE_READ_OBJECT);
-  if (stat != 0) {
-    rt_sem_signal(&mutex); //Release mutex
-    return stat;
-  }
-
-  fire_timeout();
-  
+    
   //Fill out the outbound payload
   set_outdata_word (0, index);
   set_outdata_bytes(1, subindex, nodeid);
   set_outbound_len_crc(OPCODE_READ_OBJECT, 2);
 
+  //Send the opcode
+  stat = send_opcode(OPCODE_READ_OBJECT);
+  if (stat != 0) {
+    rt_sem_signal(&mutex); //Release mutex
+    return stat;
+  }
+  
   //Define the answer length
-  inbound_payload_len = 11;
-
+  epos_num_response_words = 4;
+  inbound_payload_len = epos_num_response_words*2 + 3;
+  epos_response_status = EPOS_RESPONSE_WAITING;
+  
   //Release mutex
   rt_sem_signal(&mutex);
   
@@ -490,11 +490,33 @@ static void set_outdata_bytes(int windex, u8 low_byte, u8 high_byte) {
   outbound_payload[payload_index + 1] = high_byte;
 }
 
-static void read_indata_bytes(int windex, u8 *high_byte, u8 *low_byte) {
-  //TODO
+void epos_read_indata_bytes(int windex, u8 *high_byte, u8 *low_byte) {
+  int payload_index = windex*2 + 1;
+  
+  *low_byte  = inbound_payload[payload_index];
+  *high_byte = inbound_payload[payload_index + 1];
 }
-static u16 read_indata_word(int windex) {
-  return 0;//TODO
+
+u16 epos_read_indata_word(int windex) {
+  union {
+    u16 word;
+    u8 bytes[2];
+  } ret;
+  int payload_index = windex*2 + 1;
+
+  memcpy(ret.bytes, inbound_payload + payload_index, 2);
+  return __le16_to_cpu(ret.word);
+}
+
+u32 epos_read_indata_dword(int windex) {
+  union {
+    u32 dword;
+    u8 bytes[4];
+  } ret;
+  int payload_index = windex*2 + 1;
+
+  memcpy(ret.bytes, inbound_payload + payload_index, 4);
+  return __le32_to_cpu(ret.dword);
 }
 
 /*
@@ -538,10 +560,3 @@ static u16 crc_data(u16 crc, u8* data, int len) {
 static void errmsg(char* msg){
   printk("EPOS driver: %s\n",msg);
 }
-
-/** Debug stuff **/
-char *dresponse_ack = &response_ack;
-char *dinbound_payload = inbound_payload;
-int *dinbound_payload_len = &inbound_payload_len;
-char *doutbound_payload = outbound_payload;
-int *doutbound_payload_len = &outbound_payload_len;

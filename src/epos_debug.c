@@ -52,12 +52,6 @@ static int data = 0;
 MODULE_PARM (data, "i");
 MODULE_PARM_DESC (data, "WriteObject data.");
 
-extern char *dresponse_ack;
-extern char *dinbound_payload;
-extern int *dinbound_payload_len;
-extern char *doutbound_payload;
-extern int *doutbound_payload_len;
-
 #define DEFAULT_VELOCITY_SP 1000
 
 static int __init debug_module_init() {
@@ -102,22 +96,25 @@ static int __init debug_module_init() {
 
 static void __exit debug_module_cleanup() {
   int i;
-  
-  printk("response ack: %c\n",*dresponse_ack);
 
-  if (*doutbound_payload_len > 0) {
-    printk("sent msg:");
-    for (i=0; i<*doutbound_payload_len; i++)
-      printk(" %.2hX",(u8)doutbound_payload[i]);
-    printk("\n");
+  switch (epos_response_status) {
+  case EPOS_RESPONSE_SUCCESS: break;
+  case EPOS_RESPONSE_NONE:
+    printk("Request has no response.\n");
+    return;
+  case EPOS_RESPONSE_WAITING:
+    printk("Still waiting response...\n");
+    return;    
+  case EPOS_RESPONSE_ERROR:
+    printk("Response error!!!\n");
+    return;    
   }
   
-  if (*dinbound_payload_len > 0) {
-    printk("recv msg:");
-    for (i=0; i<*dinbound_payload_len; i++)
-      printk(" %.2hX",(u8)dinbound_payload[i]);
-    printk("\n");
-  }
+  printk("received response data:");
+  for (i=0; i<epos_num_response_words; i++)
+    printk(" %.4hX", epos_read_indata_word(i));
+  
+  printk("\n");
 }
 
 module_init(debug_module_init);

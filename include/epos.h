@@ -20,6 +20,15 @@
 
 #include <linux/types.h>
 
+typedef enum {
+  EPOS_RESPONSE_SUCCESS,
+  EPOS_RESPONSE_NONE,
+  EPOS_RESPONSE_WAITING,
+  EPOS_RESPONSE_ERROR
+} epos_response_status_t;
+extern epos_response_status_t epos_response_status;
+extern int epos_num_response_words;
+
 /**
  * @brief Write to the EPOS object dictionary.
  *
@@ -41,6 +50,42 @@ int epos_write_object(u16 index, u8 subindex, u8 nodeid, u32 data);
  * port number is not recognized by the rtai_serial module.
  */
 int epos_read_object(u16 index, u8 subindex, u8 nodeid);
+
+/**
+ * @brief Reads high and low bytes of the epos inbound message data word.
+ *
+ * The bytes are read from the appropriate fields of the inbound_message_payload
+ * variable.
+ *
+ * @param windex    Index of the data word to read.
+ * @param low_byte  Pointer to the variable that will hold the low byte.
+ * @param high_byte Pointer to the variable that will hold the high byte.
+ */
+void epos_read_indata_bytes(int windex, u8 *high_byte, u8 *low_byte);
+
+/**
+ * @brief Reads epos inbound message data word.
+ *
+ * The word is read from the appropriate field of the inbound_message_payload 
+ * variable.
+ *
+ * @param windex Index of the data word to read.
+ *
+ * @returns The data word.
+ */
+u16 epos_read_indata_word(int windex);
+
+/**
+ * @brief Reads epos inbound message data double word.
+ *
+ * The double word is read from the appropriate field of the 
+ * inbound_message_payload variable.
+ *
+ * @param windex Index of the data word to read.
+ *
+ * @returns The data double word.
+ */
+u32 epos_read_indata_dword(int windex);
 
 enum {
   EPOS_CONTROL_WORD_INDEX=0x6040,
