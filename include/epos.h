@@ -17,6 +17,7 @@
 */
 
 #ifndef EPOS_H
+#define EPOS_H
 
 #include <linux/types.h>
 
@@ -90,14 +91,20 @@ u32 epos_read_indata_dword(int windex);
 enum {
   EPOS_CONTROL_WORD_INDEX=0x6040,
   EPOS_MODES_OPERATION_INDEX=0x6060,
-  EPOS_VELOCITY_MODE_SP_INDEX=0x206B
+  EPOS_VELOCITY_MODE_SP_INDEX=0x206B,
+  EPOS_POSITION_MODE_SP_INDEX=0x2062,
+  EPOS_TARGET_VELOCITY_INDEX=0x60FF,
+  EPOS_TARGET_POSITION_INDEX=0x607A
 } epos_obj_index_t;
 
 enum {
   EPOS_FAULT_RESET_CMD=0x80,
   EPOS_SHUTDOWN_CMD=0x06,
   EPOS_SWITCH_ON_CMD=0x07,
-  EPOS_ENABLE_OPERATION_CMD=0x0F
+  EPOS_ENABLE_OPERATION_CMD=0x0F,
+  EPOS_HALT_CMD=0x0102,
+  EPOS_SET_POSITION_REL_CMD=0x7F,
+  EPOS_SET_POSITION_ABS_CMD=0x3F
 } epos_commands_t;
 
 /* Inline function helpers for some common operations */
@@ -122,6 +129,21 @@ inline int epos_enable_operation(u8 nodeid){
 			   nodeid, EPOS_ENABLE_OPERATION_CMD);
 }
 
+inline int epos_halt(u8 nodeid){
+  return epos_write_object(EPOS_CONTROL_WORD_INDEX, 0,
+			   nodeid, EPOS_HALT_CMD);
+}
+
+inline int epos_set_position_rel(u8 nodeid){
+  return epos_write_object(EPOS_CONTROL_WORD_INDEX, 0,
+			   nodeid, EPOS_SET_POSITION_REL_CMD);
+}
+
+inline int epos_set_position_abs(u8 nodeid){
+  return epos_write_object(EPOS_CONTROL_WORD_INDEX, 0,
+			   nodeid, EPOS_SET_POSITION_ABS_CMD);
+}
+
 typedef enum {
   EPOS_HOMING_MODE=0x06,
   EPOS_PROFILE_VELOCITY_MODE=0x03,
@@ -135,11 +157,23 @@ typedef enum {
 } epos_mode_t;
 
 inline int epos_set_mode(u8 nodeid, epos_mode_t mode) {
-  return epos_write_object(EPOS_MODES_OPERATION_INDEX, 0,
-			   nodeid, mode);
+  return epos_write_object(EPOS_MODES_OPERATION_INDEX, 0, nodeid, mode);
 }
 
-#define EPOS_H
+inline int epos_set_velocity(u8 nodeid, s32 val) {
+  return epos_write_object(EPOS_VELOCITY_MODE_SP_INDEX, 0, nodeid, val);
+}
 
+inline int epos_set_position(u8 nodeid, s32 val) {
+  return epos_write_object(EPOS_POSITION_MODE_SP_INDEX, 0, nodeid, val);
+}
+
+inline int epos_set_target_velocity(u8 nodeid, s32 val) {
+  return epos_write_object(EPOS_TARGET_VELOCITY_INDEX, 0, nodeid, val);
+}
+
+inline int epos_set_target_position(u8 nodeid, s32 val) {
+  return epos_write_object(EPOS_TARGET_POSITION_INDEX, 0, nodeid, val);
+}
 
 #endif//EPOS_H

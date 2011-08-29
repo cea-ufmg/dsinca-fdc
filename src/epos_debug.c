@@ -52,6 +52,10 @@ static int data = 0;
 MODULE_PARM (data, "i");
 MODULE_PARM_DESC (data, "WriteObject data.");
 
+static int mode = EPOS_VELOCITY_MODE;
+MODULE_PARM (mode, "i");
+MODULE_PARM_DESC (mode, "Mode of operation.");
+
 #define DEFAULT_VELOCITY_SP 1000
 
 static int __init debug_module_init() {
@@ -79,13 +83,32 @@ static int __init debug_module_init() {
     epos_enable_operation(nodeid);
     break;
   case 5:
-    //mode of operation: velocity
-    epos_set_mode(nodeid, EPOS_VELOCITY_MODE);
+    //set mode of operation
+    epos_set_mode(nodeid, mode);
     break;
   case 6:
-    //Write default velocity set-point
-    epos_write_object(EPOS_VELOCITY_MODE_SP_INDEX, 0,
-		      nodeid, DEFAULT_VELOCITY_SP);
+    //Write velocity set-point
+    epos_set_velocity(nodeid, data);
+    break;
+  case 7:
+    //Write position set-point
+    epos_set_position(nodeid, data);
+    break;
+  case 8:
+    //Write velocity profile set-point    
+    epos_set_target_velocity(nodeid, data);
+    break;
+  case 9:
+    //Write position profile set-point
+    epos_set_target_position(nodeid, data);
+    break;
+  case 10:
+    //Order the epos to go to the set-point (absolute)
+    epos_set_position_abs(nodeid);
+    break;
+  case 11:
+    //Order the epos to go to the set-point (relative)
+    epos_set_position_rel(nodeid);
     break;
   default:
     printk("unknown action %d\n", action);
