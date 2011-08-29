@@ -104,11 +104,15 @@ static int __init debug_module_init() {
     break;
   case 10:
     //Order the epos to go to the set-point (absolute)
-    epos_set_position_abs(nodeid);
+    epos_goto_position_abs(nodeid);
     break;
   case 11:
     //Order the epos to go to the set-point (relative)
-    epos_set_position_rel(nodeid);
+    epos_goto_position_rel(nodeid);
+    break;
+  case 12:
+    //Order the epos to go to the target velocity
+    epos_goto_velocity(nodeid);
     break;
   default:
     printk("unknown action %d\n", action);
