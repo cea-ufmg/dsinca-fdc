@@ -421,6 +421,16 @@ int epos_read_object(u16 index, u8 subindex, u8 nodeid) {
   return 0;
 }
 
+epos_response_status_t read_object_response(u32 *error, u32 *data) {
+  if (epos_response_status != EPOS_RESPONSE_SUCCESS)
+    return epos_response_status;
+
+  *error = epos_read_indata_dword(0);
+  *data = epos_read_indata_dword(2);
+  
+  return EPOS_RESPONSE_SUCCESS;
+}
+
 static void set_outbound_len_crc(u8 opcode, u8 data_word_length) {
   u16 crc;
   u8 len_m1 = data_word_length - 1;

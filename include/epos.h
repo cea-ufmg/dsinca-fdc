@@ -53,6 +53,20 @@ int epos_write_object(u16 index, u8 subindex, u8 nodeid, u32 data);
 int epos_read_object(u16 index, u8 subindex, u8 nodeid);
 
 /**
+ * @brief Reads the response of a read_object request.
+ *
+ * The argument pointers are only written in case of success. The function is
+ * non-blocking.
+ *
+ * @param error Pointer to the variable that will hold the error code.
+ * @param data Pointer to the variable that will hold the data.
+ *
+ * @returns EPOS_RESPONSE_SUCCESS if the response was succesfully received,
+ * otherwise the appropriate epos_response_status_t value.
+ */
+epos_response_status_t read_object_response(u32 *error, u32 *data);
+
+/**
  * @brief Reads high and low bytes of the epos inbound message data word.
  *
  * The bytes are read from the appropriate fields of the inbound_message_payload

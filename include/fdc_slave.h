@@ -56,18 +56,6 @@
 /*!*******************************************************************************************
 *********************************************************************************************/
 
-// Estrutura de variaveis globais ao modulo de tempo real
-struct {
-	// variaveis globais do modulo
-	RT_TASK task_slave;
-
-	// Sinaliza o fim da tarefa	
-	int volatile end_slave;
-	
-	// Variavel global do modem
-	msg_modem_t msgModem;
-} global;
-
 /// Estrutura de  configuracao do modulo
 typedef struct {
 	

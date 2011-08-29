@@ -20,6 +20,18 @@ MODULE_AUTHOR("Armando Alves Neto e Guilheme A. S. Pereira");
 MODULE_DESCRIPTION("RTAI real time data acquisition");
 MODULE_LICENSE("GPL");
 
+// Estrutura de variaveis globais ao modulo de tempo real
+struct {
+	// variaveis globais do modulo
+	RT_TASK task_slave;
+
+	// Sinaliza o fim da tarefa	
+	int volatile end_slave;
+	
+	// Variavel global do modem
+	msg_modem_t msgModem;
+} global;
+
 /*!*******************************************************************************************
 *********************************************************************************************/
 ///				FUNCAO DA PLACA DAQ

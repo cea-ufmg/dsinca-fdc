@@ -56,8 +56,6 @@ static int mode = EPOS_VELOCITY_MODE;
 MODULE_PARM (mode, "i");
 MODULE_PARM_DESC (mode, "Mode of operation.");
 
-#define DEFAULT_VELOCITY_SP 1000
-
 static int __init debug_module_init() {
   switch (action) {
   case 0:
@@ -124,6 +122,30 @@ static int __init debug_module_init() {
 static void __exit debug_module_cleanup() {
   int i;
 
+  if (action == -1) {
+    u32 error;
+    u32 data;
+    epos_response_status_t stat;
+
+    stat = read_object_response(&error, &data);
+    switch (stat) {
+    case EPOS_RESPONSE_SUCCESS:
+      printk("Read object response: error_code=0x%.8X data=0x%.8X.\n",
+	     error, data);
+      break;
+    case EPOS_RESPONSE_NONE:
+      printk("Request has no response.\n");
+      break;
+    case EPOS_RESPONSE_WAITING:
+      printk("Still waiting response...\n");
+      break;
+    case EPOS_RESPONSE_ERROR:
+      printk("Response error!!!\n");
+      break;
+    }
+    return;
+  }
+  
   switch (epos_response_status) {
   case EPOS_RESPONSE_SUCCESS: break;
   case EPOS_RESPONSE_NONE:
