@@ -9,26 +9,11 @@
 #include <rtai_serial.h>
 
 /// Definicao atribuidas pela configuracao da placa PC104
-#define AHRS_PORT        0
+#define AHRS_PORT       0
 #define GPS_PORT        1
 #define NAV_PORT        2
-#define PITOT_PORT        3
-#define TELEMETRY_PORT          5
-
-/*!*******************************************************************************************
-*********************************************************************************************/
-///                FUNCOES DA SERIAL
-/*!*******************************************************************************************
-*********************************************************************************************/
-int rt_clear_serial(int fd);
-
-unsigned int rt_getch_serial(int fd);
-
-int rt_bytes_avail_serial(int fd);
-
-int rt_putch_serial(int fd, int Byte);
-
-void rt_flush_serial(int fd);
+#define PITOT_PORT      3
+#define MODEM_PORT      5
 
 /*!*******************************************************************************************
 *********************************************************************************************/

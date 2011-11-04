@@ -1,5 +1,5 @@
 /*
-        epos.c - Maxon motor EPOS module header
+        epos.h - Maxon motor EPOS module header
     Copyright (C) 2011  Dimas Abreu Dutra - dimasadutra@gmail.com
 
     This program is free software: you can redistribute it and/or modify
@@ -122,44 +122,44 @@ enum {
   EPOS_GOTO_VELOCITY_CMD=0x000F
 } epos_commands_t;
 
-/* Inline function helpers for some common operations */
+/* Static Inline function helpers for some common operations */
 
-inline int epos_fault_reset(u8 nodeid){
+static inline int epos_fault_reset(u8 nodeid){
   return epos_write_object(EPOS_CONTROL_WORD_INDEX, 0,
                nodeid, EPOS_FAULT_RESET_CMD);
 }
 
-inline int epos_shutdown(u8 nodeid){
+static inline int epos_shutdown(u8 nodeid){
   return epos_write_object(EPOS_CONTROL_WORD_INDEX, 0,
                nodeid, EPOS_SHUTDOWN_CMD);
 }
 
-inline int epos_switch_on(u8 nodeid){
+static inline int epos_switch_on(u8 nodeid){
   return epos_write_object(EPOS_CONTROL_WORD_INDEX, 0,
                nodeid, EPOS_SWITCH_ON_CMD);
 }
 
-inline int epos_enable_operation(u8 nodeid){
+static inline int epos_enable_operation(u8 nodeid){
   return epos_write_object(EPOS_CONTROL_WORD_INDEX, 0,
                nodeid, EPOS_ENABLE_OPERATION_CMD);
 }
 
-inline int epos_halt(u8 nodeid){
+static inline int epos_halt(u8 nodeid){
   return epos_write_object(EPOS_CONTROL_WORD_INDEX, 0,
                nodeid, EPOS_HALT_CMD);
 }
 
-inline int epos_goto_position_rel(u8 nodeid){
+static inline int epos_goto_position_rel(u8 nodeid){
   return epos_write_object(EPOS_CONTROL_WORD_INDEX, 0,
                nodeid, EPOS_GOTO_POSITION_REL_CMD);
 }
 
-inline int epos_goto_position_abs(u8 nodeid){
+static inline int epos_goto_position_abs(u8 nodeid){
   return epos_write_object(EPOS_CONTROL_WORD_INDEX, 0,
                nodeid, EPOS_GOTO_POSITION_ABS_CMD);
 }
 
-inline int epos_goto_velocity(u8 nodeid){
+static inline int epos_goto_velocity(u8 nodeid){
   return epos_write_object(EPOS_CONTROL_WORD_INDEX, 0,
                nodeid, EPOS_GOTO_VELOCITY_CMD);
 }
@@ -176,23 +176,23 @@ typedef enum {
   EPOS_STEP_DIRECTION_MODE=0xFA
 } epos_mode_t;
 
-inline int epos_set_mode(u8 nodeid, epos_mode_t mode) {
+static inline int epos_set_mode(u8 nodeid, epos_mode_t mode) {
   return epos_write_object(EPOS_MODES_OPERATION_INDEX, 0, nodeid, mode);
 }
 
-inline int epos_set_velocity(u8 nodeid, s32 val) {
+static inline int epos_set_velocity(u8 nodeid, s32 val) {
   return epos_write_object(EPOS_VELOCITY_MODE_SP_INDEX, 0, nodeid, val);
 }
 
-inline int epos_set_position(u8 nodeid, s32 val) {
+static inline int epos_set_position(u8 nodeid, s32 val) {
   return epos_write_object(EPOS_POSITION_MODE_SP_INDEX, 0, nodeid, val);
 }
 
-inline int epos_set_target_velocity(u8 nodeid, s32 val) {
+static inline int epos_set_target_velocity(u8 nodeid, s32 val) {
   return epos_write_object(EPOS_TARGET_VELOCITY_INDEX, 0, nodeid, val);
 }
 
-inline int epos_set_target_position(u8 nodeid, s32 val) {
+static inline int epos_set_target_position(u8 nodeid, s32 val) {
   return epos_write_object(EPOS_TARGET_POSITION_INDEX, 0, nodeid, val);
 }
 

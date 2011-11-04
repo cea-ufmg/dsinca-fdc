@@ -115,16 +115,6 @@ typedef struct
         long long     time_sys;
     }  msg_daq_t;
 
-/// DEFINICAO DO TIPO DE MENSAGEM A SER ENVIADA PELA FIFO IMU    ////////////////////////////
-typedef struct
-    {
-        int validade;
-        float gyro[3];
-        float accel[3];
-        double time_stamp;    // Tempo dado pela imu
-        long long time_sys;    // Tempo do sistema
-    }  msg_imu_t;
-
 /// DEFINICAO DO TIPO DE MENSAGEM A SER ENVIADA PELA FIFO AHRS    ////////////////////////////
 typedef struct
     {
@@ -198,33 +188,9 @@ typedef struct
         int hpe_units, vpe_units, epe_units;
         //other stuff
         int validity;            // 1 = success, 0 = falha geral, 2 = falha timeout.
-           long long time_sys;
+        long long time_sys;
     } msg_gps_t;
 
-/// ESTRUTURA DE DADOS DA MSG DO MODEM ////////////////////////////////////////////////////////
-typedef struct
-    {
-    // Time-stamp do pacote
-        long long time_sys;    // Tempo do sistema no instante do envio
-    
-    //Dados da placa DAQ
-        float tensao[16];
-
-    //Dados da IMU
-        float gyro[3];
-        float accel[3];
-        double time_stamp;
-        
-    //Dados do GPS
-        float latitude,longitude,altitude,hdop,geoid_separation;
-           int north_south;    //north = 78, south = 83
-           int east_west;        //west = 87, east = 69
-        int n_satellites;    // 0 a 12
-    
-    // Contador de pacotes
-        unsigned char count_packets;
- }  msg_modem_t;
- 
  /// Definiçoes do processo de modo usuario
  
  // Definicao das mensagens de log

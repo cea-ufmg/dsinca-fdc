@@ -15,6 +15,7 @@ da placa DAQ de da IMU. O GPS roda a 1 Hz, e a transmissao via modem sera de 10 
 *********************************************************************************************
 ********************************************************************************************/
 #include "fdc_slave.h"
+#include "modem.h"
 
 MODULE_AUTHOR("Armando Alves Neto e Guilheme A. S. Pereira");
 MODULE_DESCRIPTION("RTAI real time data acquisition");
@@ -27,9 +28,6 @@ struct {
 
     // Sinaliza o fim da tarefa    
     int volatile end_slave;
-    
-    // Variavel global do modem
-    msg_modem_t msgModem;
 } global;
 
 /*!*******************************************************************************************
@@ -51,12 +49,9 @@ static void rt_func_daq(configure *config)
         msg.validade = rt_process_daq_16(&msg);
 
         msg.time_sys = rt_get_time_ns(); // Pega o tempo de coleta dos dados
-
-        // Completa a mensagem do modem
-        //for (i=0;i<16;i++)
-        //    global.msgModem.tensao[i] = msg.tensao[i];
-
+	
         rtf_put(RT_FIFO_DAQ, &msg, sizeof(msg)); //Poem na fila
+	modem_set_daq_data(&msg);
     }
     return (void)0;
 }
@@ -123,7 +118,9 @@ static void rt_func_nav(configure* config){
         msg.validade = rt_get_nav_data(&msg); //Busca os dados do nav
         msg.time_sys = rt_get_time_ns(); //Pega o tempo de coleta dos dados
         rtf_put(RT_FIFO_NAV, &msg, sizeof(msg)); // poe na fila
+	modem_set_nav_data(&msg);
     }
+    
     return (void)0;
 }
 
@@ -151,48 +148,12 @@ static void rt_func_pitot(configure* config){
 /*    Esta funcao e chamada quando se deseja transmitir um conjunto de dados por meio do link
 de radio. Neste ponto, a estrutura de dados do modem ja foi preenchida pelas outras funcoes
 bastando agora transmiti-la. */
-/*static void rt_func_modem(configure *config)
-{
-    char *msgbuf;     // Utilizado no calculo de CRC
-    char *crc;    // Recebe o resultado do CRC
-    char sync0 = SYNC_SER_0, sync1 = SYNC_SER_1; // Inicializa os caracteres de sincronismo serial
-    unsigned short    CRC;    // Recebe o resultado do CRC
-
-    if (config->modem_enable) {    
-        // Completa a mensagem com o time-stamp
-        global.msgModem.time_sys = rt_get_time_ns();
-        
-        // Completa a mensagem com o numero do pacote enviado
-        global.msgModem.count_packets = ((global.msgModem.count_packets + 1) % MAX_PACKETS_LOST);
-    
-        // Transforma a estrutura num vetor de caracteres
-        msgbuf = (char *) &(global.msgModem);
-        
-        // Calcula o CRC da mensagem completa e coloca num buffer de char
-        // Os dois bytes de sincronismo nao entram no calculo
-        CRC = CRC16(msgbuf,sizeof(msg_modem_t));
-        crc = (char *)(&CRC);
-    
-        // Transmite o primeiro byte de sincronismo
-        if (rt_spwrite(MODEM_PORT, &sync0, sizeof(char)) != 0) {
-            return (void)1; // Nao transmitiu todos os caracteres
-        }
-        // Transmite o segundo byte de sincronismo
-        if (rt_spwrite(MODEM_PORT, &sync1, sizeof(char)) != 0) {
-            return (void)1; // Nao transmitiu todos os caracteres
-        }
-        // Transmite a mensagem do modem atraves da serial
-        if (rt_spwrite(MODEM_PORT, msgbuf, sizeof(msg_modem_t)) != 0) {
-            return (void)1; // Nao transmitiu todos os caracteres
-        }
-        // Transmite o CRC da mensagem
-        if (rt_spwrite(MODEM_PORT, crc, sizeof(unsigned short)) != 0) {
-            return (void)1; // Nao transmitiu todos os caracteres
-        }        
-    } //end if
-    return (void)0;
+static void rt_func_modem(configure *config) {
+  if (config->modem_enable) {
+    modem_transmit();
+  }
 }
-*/
+
 /*!*******************************************************************************************
 *********************************************************************************************/
 ///            FUNCAO DE RECEBIMENTO DO MODEM
@@ -262,14 +223,10 @@ static int rt_func_control(configure * config)
                 config->daq_enable   = 1;
                 config->gps_enable   = 1;
                 config->ahrs_enable  = 1;
-                config->nav_enable     = 1;
+                config->nav_enable   = 1;
                 config->pitot_enable = 1;
-                //config->modem_enable = 1;
-                
-                // Reseta a UART do modulo MSI-P600, limpando
-                // os buffers de transmissao e de recepcao.
-                //rt_init_uarts_gps();
-                
+                config->modem_enable = 1;
+		
                 result = OK;
             break;
     
@@ -280,7 +237,7 @@ static int rt_func_control(configure * config)
                 config->ahrs_enable  = 0;
                 config->nav_enable   = 0;
                 config->pitot_enable = 0;
-                //config->modem_enable = 0;
+                config->modem_enable = 0;
                 
                 result = OK;
             break;
@@ -347,7 +304,6 @@ static void func_fdc_slave(int t)
 {
     // Contadores que definem o periodo de cada funcao
     int count_gps = 0;
-        // int count_modem = 0, count_modem_recev = 0;
 
     configure config; // Configuracao de execucao do modulo fdc_slave
 
@@ -355,11 +311,10 @@ static void func_fdc_slave(int t)
     config.daq_enable   = 0;
     config.gps_enable   = 0;
     config.ahrs_enable  = 0;
-    config.nav_enable    = 0;
+    config.nav_enable   = 0;
     config.pitot_enable = 0;
-    //config.modem_enable = 0;
-    //config.imu_filter   = 0;
-
+    config.modem_enable = 0;
+    
     while (!global.end_slave) { // Enquanto nao for determinado o fim do modulo
 
         // Incrementa os contadores do escalonador
@@ -387,12 +342,10 @@ static void func_fdc_slave(int t)
             rt_func_gps(&config);
             count_gps = 0;
         }
+
+	//Escreve os dados do modem
+	rt_func_modem(&config);
         
-        // Acessa o modem com uma frequencia maxima ainda NAO DETERMINADA
-        //if (count_modem >= _05_HZ){
-        //    rt_func_modem(&config);    // Periodo de 10 Hz
-        //    count_modem = 0;
-        //}
         
         //if (count_modem_recev >= _01_HZ){
         //    rt_func_modem_recev();
@@ -448,9 +401,6 @@ int init_module(void)
 
     global.end_slave = 0; // Varaivel global que sinaliza o fim da tarefa de tempo real
     
-    // Inicilaiza o contador de pacotes do modem
-    global.msgModem.count_packets = 0;
-
     //Cria a fila de mensagens
 
     if (rtf_create_using_bh(RT_FIFO_AHRS,   20000, 0) < 0) {

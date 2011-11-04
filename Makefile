@@ -20,7 +20,7 @@ VPATH = ./src:./include:./object
 ################################################################################
 all: fdc_master fdc_cmd_parser object/rtai_gps.o object/rtai_daq.o \
      object/rtai_ahrs.o object/rtai_nav.o object/rtai_pitot.o object/fdc_slave.o\
-     object/epos.o object/epos_debug.o
+     object/epos.o object/epos_debug.o object/modem.o
 
 ## Thread de salvamento dos dados
 object/save_data.o : src/save_data.c include/save_data.h include/messages.h include/fdc_structs.h
