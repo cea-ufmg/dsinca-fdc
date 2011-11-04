@@ -22,7 +22,9 @@
 #include "messages.h"
 
 void modem_set_daq_data(const msg_daq_t *);
+void modem_set_gps_data(const msg_gps_t *);
 void modem_set_nav_data(const msg_nav_t *);
+void modem_set_pitot_data(const msg_pitot_t *);
 void modem_transmit();
 
 #endif//MODEM_H

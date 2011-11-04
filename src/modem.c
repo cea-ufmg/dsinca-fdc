@@ -61,11 +61,18 @@ static void errmsg(char * msg);
 struct modem_msg_t {
   int16_t header;
   float daq[16];
+  float gps_latitude, gps_longitude, gps_altitude;
+  float gps_nvel, gps_evel, gps_dvel;
   float nav_angle[3];
   float nav_gyro[3];
   float nav_accel[3];
   float nav_nvel, nav_evel, nav_dvel;
   float nav_latitude, nav_longitude, nav_altitude;
+  float pitot_static;
+  float pitot_temperature;
+  float pitot_dynamic;
+  float pitot_aoa;
+  float pitot_sideslip;
   int64_t tstamp;
   uint8_t crc;
 } modem_msg = {0x4d54};
@@ -104,6 +111,15 @@ void modem_set_daq_data(const msg_daq_t *daq_msg){
     modem_msg.daq[i] = daq_msg->tensao[i];
 }
 
+void modem_set_gps_data(const msg_gps_t *gps_msg){
+  modem_msg.gps_latitude = gps_msg->latitude;
+  modem_msg.gps_longitude = gps_msg->longitude;
+  modem_msg.gps_altitude = gps_msg->altitude;
+  modem_msg.gps_nvel = gps_msg->north_v;
+  modem_msg.gps_evel = gps_msg->east_v;
+  modem_msg.gps_dvel = -gps_msg->up_v;
+}
+
 void modem_set_nav_data(const msg_nav_t *nav_msg){
   memcpy(&modem_msg.nav_angle, &nav_msg->angle, sizeof(modem_msg.nav_angle));
   memcpy(&modem_msg.nav_gyro, &nav_msg->gyro, sizeof(modem_msg.nav_gyro));
@@ -118,6 +134,14 @@ void modem_set_nav_data(const msg_nav_t *nav_msg){
   modem_msg.nav_altitude = nav_msg->altitude;
 }
 
+void modem_set_pitot_data(const msg_pitot_t *pitot_msg){
+  modem_msg.pitot_static = pitot_msg->static_pressure;
+  modem_msg.pitot_temperature = pitot_msg->temperature;
+  modem_msg.pitot_dynamic = pitot_msg->dynamic_pressure;
+  modem_msg.pitot_aoa = pitot_msg->attack_angle;
+  modem_msg.pitot_sideslip = pitot_msg->sideslip_angle;
+}
+
 void modem_transmit(){
   modem_msg.tstamp = rt_get_time_ns();
   modem_msg.crc = crc7(0, (u8*) &modem_msg, sizeof(modem_msg) - 1);
@@ -125,6 +149,7 @@ void modem_transmit(){
   if (rt_spwrite(ser_port, (char*)&modem_msg, -sizeof(modem_msg)))
     errmsg("serial buffer full.");
 }
+
 
 static void errmsg(char* msg){
   printk("Modem driver: %s\n",msg);

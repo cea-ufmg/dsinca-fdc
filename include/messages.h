@@ -165,13 +165,13 @@ typedef struct
         float altitude;
         float hdop;
         float geoid_separation;
-           int north_south;        //north = 78, south = 83
-           int east_west;            //west = 87, east = 69
-           int fix_indicator;        // 0 = fix nao disponivel ou invalido
-           int n_satellites;        // 0 a 12
-           int units_altitude;        // meters = 77
-           int units_geoid_separation;    //meters = 77
-           float GPS_time_gga;        // retorna tempo em segundos desde o começo do dia
+        int north_south;        //north = 78, south = 83
+        int east_west;            //west = 87, east = 69
+        int fix_indicator;        // 0 = fix nao disponivel ou invalido
+        int n_satellites;        // 0 a 12
+        int units_altitude;        // meters = 77
+        int units_geoid_separation;    //meters = 77
+        float GPS_time_gga;   // retorna tempo em segundos desde o começo do dia
         //rmc message attributes
         float GPS_time_rmc;     // retorna tempo em segundo deste o começo do dia
         int status;             //A(valido) = 65 V(invalido) = 86

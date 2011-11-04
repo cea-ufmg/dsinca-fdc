@@ -65,29 +65,18 @@ static void rt_func_daq(configure *config)
 via modem e coloca os dados na fila de tempo real do gps. */
 static void rt_func_gps(configure* config)
 {
-    msg_gps_t msg; // Tipo da mensagem do gps
-
     if (config->gps_enable){ // Caso a coleta de dados do gps esteja habilitada
+        msg_gps_t msg;
 
         // Captura os dados do gps e retorna a validade destes dados
         //msg.validade = rt_process_GPS_data(&msg);
         rt_get_gps_data(&msg);
 
         msg.time_sys = rt_get_time_ns(); // Pega o tempo de coleta dos dados
-    
-        /*// Completando a mensagem do modem com dados do gps
-        global.msgModem.latitude    = msg.latitude;
-        global.msgModem.longitude     = msg.longitude;
-        global.msgModem.altitude     = msg.altitude;
-        global.msgModem.hdop         = msg.hdop;
-        global.msgModem.geoid_separation= msg.geoid_separation;
-        global.msgModem.north_south     = msg.north_south;
-        global.msgModem.east_west     = msg.east_west;
-        global.msgModem.n_satellites     = msg.n_satellites;*/
-        
+	
         rtf_put(RT_FIFO_GPS, &msg, sizeof(msg)); //Poe na fila
+	modem_set_gps_data(&msg);
     }
-    return (void)0;
 }
 
 /*
@@ -136,6 +125,7 @@ static void rt_func_pitot(configure* config){
         msg.validade = rt_get_pitot_data(&msg); //Busca os dados do nav
         msg.time_sys = rt_get_time_ns(); //Pega o tempo de coleta dos dados
         rtf_put(RT_FIFO_PITOT, &msg, sizeof(msg)); // poe na fila
+	modem_set_pitot_data(&msg);
     }
     return (void)0;
 }
@@ -371,10 +361,9 @@ int terminate_module(void)
     global.end_slave = 1;    // Seta o fim da tarefa de tempo real
 
     stop_rt_timer();         //Para o tempo
-    
-    // Fecha os dispositivos utilizados
-    //rt_close_serial(MODEM_PORT);
-    rt_task_delete(&global.task_slave);    //Termina a tarefa de tempo real principal    
+
+    //Termina a tarefa de tempo real principal
+    rt_task_delete(&global.task_slave);    
 
     rtf_destroy(RT_FIFO_AHRS);
     rtf_destroy(RT_FIFO_DAQ);
