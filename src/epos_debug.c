@@ -131,7 +131,7 @@ static void __exit debug_module_cleanup() {
     switch (stat) {
     case EPOS_RESPONSE_SUCCESS:
       printk("Read object response: error_code=0x%.8X data=0x%.8X.\n",
-	     error, data);
+         error, data);
       break;
     case EPOS_RESPONSE_NONE:
       printk("Request has no response.\n");

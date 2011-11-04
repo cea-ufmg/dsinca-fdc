@@ -17,99 +17,36 @@ INCLUDE = -I$(RT_KERNEL)/include -I$(RTAI)/include
 # Indica diretorios onde devem ser procurados os arquivos
 VPATH = ./src:./include:./object
 
-########################################################################################
-all : save_data ioSockets fdc_master fdc_cmd_parser rtai_gps rtai_daq rtai_ahrs rtai_nav rtai_pitot fdc_slave object/epos.o object/epos_debug.o
+################################################################################
+all: fdc_master fdc_cmd_parser object/rtai_gps.o object/rtai_daq.o \
+     object/rtai_ahrs.o object/rtai_nav.o object/rtai_pitot.o object/fdc_slave.o\
+     object/epos.o object/epos_debug.o
 
 ## Thread de salvamento dos dados
-save_data : save_data.c save_data.h messages.h fdc_structs.h
-	##
-	## save_data
-	##
-	g++ $(CFLAGS) $(INCLUDE) -c $< -o $(OBJDIR)/$@.o
-	##
+object/save_data.o : src/save_data.c include/save_data.h include/messages.h include/fdc_structs.h
+	$(CC) $(CFLAGS) $(INCLUDE) -c $< -o $@
 
-## Funcao de envio dos dados
-ioSockets : ioSockets.cpp ioSockets.h
-	##
-	## ioSocket
-	##
-	g++ $(CFLAGS) $(INCLUDE) -c $< -o $(OBJDIR)/$@.o
-	##
 
 ## Processo principal que cuida da comunicacao com a
 ## tarefa de tempo real
-fdc_master : fdc_master.c fdc_master.h messages.h fdc_structs.h save_data.h save_data.c ioSockets.cpp paralela_leds.h
-	##
-	## fdc_master
-	##
-	g++ $(CFLAGS) $(INCLUDE) ./object/ioSockets.o ./object/save_data.o $(SRCDIR)/acel.cpp $(SRCDIR)/giro.cpp $(SRCDIR)/quaternio.cpp $(SRCDIR)/euler.cpp -lpthread $< -o $@
-	##
+fdc_master: src/fdc_master.c object/save_data.o fdc_master.h messages.h fdc_structs.h save_data.h
+	$(CC) $(CFLAGS) $(INCLUDE) ./object/save_data.o -lpthread $< -o $@
 
 ## Sub-processo responsavel pela analise lexicografica de comandos
 ## enviados na FIFO de controle do FDC, que repassa as mensagens
 ## jah processadas para fdc_master.
-fdc_cmd_parser : fdc_cmd_parser.c fdc_cmd_parser.h messages.h
-	$(CC) $(CFLAGS) $(INCLUDE) ./src/fdc_cmd_parser.c -o $@
+fdc_cmd_parser: src/fdc_cmd_parser.c include/fdc_cmd_parser.h include/messages.h
+	$(CC) $(CFLAGS) $(INCLUDE) $< -o $@
 
 ## Codigo C do analisador lexicografico gerado automaticamente
 ## pelo pacote "flex".
-fdc_cmd_parser.c : fdc_cmd_parser.y
-	##
-	## fdc_cmd_parser
-	##
-	$(FLEX) -o$(SRCDIR)/fdc_cmd_parser.c $<
-	##
-
-## Modulo do kernel responsavel por coletar os dados do gps no pc104
-## Autor: Flavio Mota
-rtai_gps: rtai_gps.c rtai_gps.h
-	##
-	## rtai_gps
-	##	
-	$(CC) $(MFLAGS) $(INCLUDE) -c $< -o $(OBJDIR)/$@.o
-	##
-
-## Funcoes de acesso a placa daq
-rtai_daq: rtai_daq.c rtai_daq.h
-	##
-	## rtai_daq
-	##	
-	$(CC) $(MFLAGS) $(INCLUDE) -c $< -o $(OBJDIR)/$@.o
-	##
-
-## Funcoes de acesso ao ahrs
-rtai_ahrs: rtai_ahrs.c rtai_ahrs.h
-	##
-	## rtai_ahrs
-	##	
-	$(CC) $(MFLAGS) $(INCLUDE) -c $< -o $(OBJDIR)/$@.o
-	##
-
-## Funcoes de acesso ao nav
-rtai_nav: rtai_nav.c rtai_nav.h
-	##
-	## rtai_nav
-	##	
-	$(CC) $(MFLAGS) $(INCLUDE) -c $< -o $(OBJDIR)/$@.o
-	##
-
-## Funcoes de acesso ao pitot
-rtai_pitot: rtai_pitot.c rtai_pitot.h
-	##
-	## rtai_pitot
-	##	
-	$(CC) $(MFLAGS) $(INCLUDE) -c $< -o $(OBJDIR)/$@.o
-	##
+src/fdc_cmd_parser.c: src/fdc_cmd_parser.y
+	$(FLEX) -o$@ $<
 
 ## Modulo de tempo real para a captura dos dados no uav. 
 ## Estes dados sao enviados para o programa uav_jedi e para a estacao de solo
-fdc_slave: fdc_slave.c fdc_slave.h messages.h rtai_crc.h rtai_rt_serial.h rtai_daq.h rtai_ahrs.h rtai_gps.h rtai_nav.h rtai_picopic.h rtai_modem.h
-	##
-	## fdc_slave
-	##
-	$(CC) $(MFLAGS) $(INCLUDE) -c $< -o $(OBJDIR)/$@.o
-	##
-	
+object/fdc_slave.o: src/fdc_slave.c include/fdc_slave.h include/messages.h include/rtai_rt_serial.h include/rtai_daq.h include/rtai_ahrs.h include/rtai_gps.h include/rtai_nav.h
+	$(CC) $(MFLAGS) $(INCLUDE) -c $< -o $@
 
 $(OBJDIR)/%.o: $(SRCDIR)/%.c $(INCLUDEDIR)/%.h
 	$(CC) $(MFLAGS) $(INCLUDE) -c $< -o $@
@@ -144,7 +81,7 @@ rm:
 	rmmod rtai_sem
 	rmmod rtai_ksched
 	rmmod rtai_hal
-	
+
 ########################################################################################	
 
 .PHONY : clean

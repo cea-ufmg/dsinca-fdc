@@ -1,6 +1,6 @@
 /*!*******************************************************************************************
 **********************************************************************************************
-			BIBLIOTECA PARA SALVAMENTO DOS DADOS
+            BIBLIOTECA PARA SALVAMENTO DOS DADOS
 *********************************************************************************************
 ********************************************************************************************/
 #ifndef _SAVE_DATA
@@ -11,11 +11,11 @@
 
 
 // Nomes de arquivos default
-#define ARQ_DAQ		"daq_file.dat"
-#define ARQ_AHRS	"ahrs_file.dat"
-#define ARQ_GPS		"gps_file.dat"
-#define ARQ_NAV		"nav_file.dat"
-#define ARQ_PITOT	"pitot_file.dat"
+#define ARQ_DAQ        "daq_file.dat"
+#define ARQ_AHRS    "ahrs_file.dat"
+#define ARQ_GPS        "gps_file.dat"
+#define ARQ_NAV        "nav_file.dat"
+#define ARQ_PITOT    "pitot_file.dat"
 
 // Diretoria que abriga os arquivos
 #define FILES_PATH "/tmp/data/"
@@ -81,7 +81,7 @@ int create_new_dir (void);
 
 /*!*******************************************************************************************
 *********************************************************************************************/
-/*	Thread para a coleta dos dados. Primeiramente eh resetada a variavel de fim da thread,
+/*    Thread para a coleta dos dados. Primeiramente eh resetada a variavel de fim da thread,
  e na sequencia sao abertos os arquivos default ou novos.Entao se escreve os cabecalhos dos
  arquivos e so entao passasse a captar os dados, ate que a thread seja terminada.*/
 void *save_data(void *arg);

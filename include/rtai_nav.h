@@ -1,5 +1,5 @@
 /*
-	rtai_nav.h - NAV440CA-400 module header
+    rtai_nav.h - NAV440CA-400 module header
     Copyright (C) 2010  Víctor Costa da Silva Campos - kozttah@gmail.com
 
     This program is free software: you can redistribute it and/or modify
@@ -27,7 +27,7 @@
 #define NAV_HEADER_CHAR 0x55 // U
 
 /*--------------------------------------------------------------------------------------------
-					NAV COMANDS AND RESPONSES
+                    NAV COMANDS AND RESPONSES
 --------------------------------------------------------------------------------------------*/
 
 //Link Test
@@ -39,7 +39,7 @@
 #define ECHO2 0x48 //H
 
 /*--------------------------------------------------------------------------------------------
-					INTERACTIVE COMMANDS
+                    INTERACTIVE COMMANDS
 --------------------------------------------------------------------------------------------*/
 //Get Packet Request - Input - Command + packet type + CRC
 #define GET_PACKET1 0x4750 //GP
@@ -63,7 +63,7 @@
 
 
 /*--------------------------------------------------------------------------------------------
-					NAV DATA CONVERSION
+                    NAV DATA CONVERSION
 --------------------------------------------------------------------------------------------*/
 
 //Conversion macros
@@ -99,40 +99,40 @@ int convert_int_data(unsigned char msb,unsigned char lsb);
 int convert_int_data2(unsigned char msb1,unsigned char lsb1, unsigned char msb2, unsigned char lsb2);
 
 /*--------------------------------------------------------------------------------------------
-					NAV STATUS FIELD MASKS
-					0 - means normal
-					1 - means error/status active
+                    NAV STATUS FIELD MASKS
+                    0 - means normal
+                    1 - means error/status active
 --------------------------------------------------------------------------------------------*/
-#define MASTER_ERROR	0x01
-#define HARD_ERROR		0x02
-#define COM_ERROR		0x04
-#define SOFT_ERROR		0x08
-#define MASTER_STATUS	0x01
-#define HARD_STATUS		0x02
-#define COM_STATUS		0x04
-#define SOFT_STATUS		0x08
-#define SENSOR_STATUS	0x10
+#define MASTER_ERROR    0x01
+#define HARD_ERROR        0x02
+#define COM_ERROR        0x04
+#define SOFT_ERROR        0x08
+#define MASTER_STATUS    0x01
+#define HARD_STATUS        0x02
+#define COM_STATUS        0x04
+#define SOFT_STATUS        0x08
+#define SENSOR_STATUS    0x10
 
 /*--------------------------------------------------------------------------------------------
-					NAV COMMUNICATION DEFAULTS
+                    NAV COMMUNICATION DEFAULTS
 
-	RS-232
-	baud rate - 38400 (default)
-	8 data bits
-	1 start bit
-	1 stop bit
-	no parity
-	no handshake (flow control)
+    RS-232
+    baud rate - 38400 (default)
+    8 data bits
+    1 start bit
+    1 stop bit
+    no parity
+    no handshake (flow control)
 --------------------------------------------------------------------------------------------*/
 #define NAV_DEFAULT_BAUD 57600
 #define NAV_MSG_LEN 47
 
 /*--------------------------------------------------------------------------------------------
-					NAV CONSTANTS AND GLOBAL VARIABLES
+                    NAV CONSTANTS AND GLOBAL VARIABLES
 --------------------------------------------------------------------------------------------*/
 
 // Defines the nav task period to 20 ms (50 Hz)
-#define NAV_PERIOD	20	
+#define NAV_PERIOD    20    
 
 // Standard sampling period time
 #define A_MILLI_SECOND 1000000
@@ -150,7 +150,7 @@ msg_nav_t global_msg_nav;
 int global_new_data_nav = 0;
 
 /*--------------------------------------------------------------------------------------------
-					NAV FUNCTIONS
+                    NAV FUNCTIONS
 --------------------------------------------------------------------------------------------*/
 // Opens the NAV communication and configures it
 int rt_open_nav(void);

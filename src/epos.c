@@ -53,7 +53,7 @@ MODULE_LICENSE("GPL");
 static int ser_port = 0;
 MODULE_PARM (ser_port, "i");
 MODULE_PARM_DESC (ser_port, "The rtai_serial serial port number. "
-		  "Integer value (default 0)");
+          "Integer value (default 0)");
 
 static int baud = 38400;
 MODULE_PARM (baud, "i");
@@ -62,7 +62,7 @@ MODULE_PARM_DESC (baud, "The baud rate. Integer value (default 38400)");
 static int timeout = 500;
 MODULE_PARM (timeout, "i");
 MODULE_PARM_DESC (timeout, "The communication timeout, in miliseconds. "
-		  "Integer value (default 500)");
+          "Integer value (default 500)");
 
 /** Module definitions **/
 //Serial communication parameters
@@ -150,7 +150,7 @@ static int __init epos_init() {
   int err;
   
   err = rt_spopen(ser_port, baud,  DATABITS, STOPBITS,
-		  PARITY, HARDCTRL, FIFOTRIG);
+          PARITY, HARDCTRL, FIFOTRIG);
   switch (err) {
   case -ENODEV:
     errmsg("Serial port number rejected by rtai_serial.");
@@ -224,7 +224,7 @@ static void serial_callback(int rxavail, int txfree) {
   case SENDING_RESPONSE_BEGIN_ACK:
     if (TRANSMISSION_DONE(txfree)) {
       if (response_ack == 'O')
-	state = WAITING_RESPONSE_PAYLOAD;
+    state = WAITING_RESPONSE_PAYLOAD;
       else comm_error();
     }
     //intentional fall-through again, same reasons
@@ -286,7 +286,7 @@ static void send_payload() {
   
   rt_spset_thrs(ser_port, 1, outbound_payload_len);
   num_not_written = rt_spwrite(ser_port, outbound_payload,
-			       -outbound_payload_len);
+                   -outbound_payload_len);
   if (num_not_written != 0) comm_error();
   else state = SENDING_PAYLOAD;
 }

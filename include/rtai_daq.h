@@ -1,6 +1,6 @@
 /*!*******************************************************************************************
 *********************************************************************************************/
-///				BIBLIOTECA DA PLACA DAQ
+///                BIBLIOTECA DA PLACA DAQ
 /*!*******************************************************************************************
 *********************************************************************************************/
 #ifndef RTAI_DAQ_H
@@ -14,8 +14,8 @@
 
 #define PORTS_PER_CARD     16
 
-#define BASE_ADRESS		0x300	/* Endereco da placa*/
-#define CARD			0
+#define BASE_ADRESS        0x300    /* Endereco da placa*/
+#define CARD            0
 
 #define STATUS          0x00    /*  Read port */
 #define CONTROL         0x00    /*  Write port */
@@ -36,31 +36,31 @@
 #define DPOT            0x02    /* bit mask for DPOT chip select */
 #define EEPROM          0x04    /* bit mask for EEPROM chip select */
 
-#define AINPUT_CG 	 	 0x7ffbL /* value read for gain calibration */
-#define AOUTPUT_RB	 	 0x7fffL /* value read back for full scale output */
+#define AINPUT_CG           0x7ffbL /* value read for gain calibration */
+#define AOUTPUT_RB          0x7fffL /* value read back for full scale output */
 
 // Funcoes para acesso de hardware
-#define SSL_OUT(port,data)	outb(data,port)
+#define SSL_OUT(port,data)    outb(data,port)
 #define SSL_OUTW(port,data) outw(data,port)
-#define SSL_IN(port)		inb(port) 
-#define SSL_INW(port)		inw(port)
+#define SSL_IN(port)        inb(port) 
+#define SSL_INW(port)        inw(port)
 
 /*----------------------------------------------------------------------
  *  Misc. Definitions
  *----------------------------------------------------------------------*/
 #define SSL_STRICT
-#define SSL_TRUE	      1
-#define SSL_FALSE	      0
-#define SSL_NULL	      0
-#define SSL_ON		      1
-#define SSL_OFF 	      0
+#define SSL_TRUE          1
+#define SSL_FALSE          0
+#define SSL_NULL          0
+#define SSL_ON              1
+#define SSL_OFF           0
 
 /*----------------------------------------------------------------------
  *  Error Code Definitions
  *----------------------------------------------------------------------*/
 #define SSL_ERR_NOERROR       0
 #define SSL_ERR_GEN_FAIL      1
-#define SSL_ERR_BUSY	      2
+#define SSL_ERR_BUSY          2
 #define SSL_ERR_TIMEOUT       3
 #define SSL_ERR_BAD_MASK      4
 #define SSL_ERR_OVERFLOW      5
@@ -93,10 +93,10 @@
 
 /* Digital Pot addresses */
 
-#define VCMDAS1_DP_AD_OFFSET 	0x00
-#define VCMDAS1_DP_AD_GAIN		0x02
-#define VCMDAS1_DP_DA0_GAIN 	0x01
-#define VCMDAS1_DP_DA1_GAIN 	0x03
+#define VCMDAS1_DP_AD_OFFSET    0x00
+#define VCMDAS1_DP_AD_GAIN      0x02
+#define VCMDAS1_DP_DA0_GAIN     0x01
+#define VCMDAS1_DP_DA1_GAIN     0x03
 
 /*--------------------------------------------------------------------------
  *  MACRO DEFINITIONS
@@ -104,22 +104,22 @@
 
 void OUT_SAVEW(unsigned int p, unsigned int d);
 #define OUT_SAVEW(p,d)(\
-							SSL_OUTW(BASE_ADRESS + (p), (d)),\
-							VCMDAS1.out_val = (d))
+                       SSL_OUTW(BASE_ADRESS + (p), (d)),\
+                       VCMDAS1.out_val = (d))
 
 /*--------------------------------------------------------------------------
  *  STRUCTURE DEFINITIONS
  *-------------------------------------------------------------------------*/
 struct VCMDAS1_info 
 {
-	 unsigned char initialized;
-	 unsigned int ain_range;
-	 unsigned int ain_offset;
-	 unsigned int ain_gain;
-	 unsigned int aout_range[2];
-	 unsigned int aout_offset[2];
-	 unsigned int aout_gain[2];
-	 unsigned int out_val;
+     unsigned char initialized;
+     unsigned int ain_range;
+     unsigned int ain_offset;
+     unsigned int ain_gain;
+     unsigned int aout_range[2];
+     unsigned int aout_offset[2];
+     unsigned int aout_gain[2];
+     unsigned int out_val;
 };
 
 struct VCMDAS1_info VCMDAS1;

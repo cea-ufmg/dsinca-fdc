@@ -10,7 +10,7 @@ MODULE_LICENSE("GPL");
 static int __rtai_daq_init(void)
 {
     InitHw(BASE_ADRESS, VCMDAS1_PM5, VCMDAS1_PM5, VCMDAS1_PM5);   
-	return 0;
+    return 0;
 }
 
 /*!/////////////////////////////////////////////////////////////////////////////////////////////
@@ -18,7 +18,6 @@ static int __rtai_daq_init(void)
  */
 static void __rtai_daq_exit(void)
 {
-	return (void)0;
 }
 
 module_init(__rtai_daq_init);
@@ -29,29 +28,28 @@ module_exit(__rtai_daq_exit);
  */ 
 int rt_process_daq_16(msg_daq_t* msg)
 {
-	int i, ret;
-	int invalido = 0; // Validade dos dados coletados
-	float valor = 0.0;
+    int i, ret;
+    int invalido = 0; // Validade dos dados coletados
+    float valor = 0.0;
 
-	for (i=0; i<16; i++)
-		{		
-			ret = getChannelVolts(i, &valor);
-			
-			if (ret != SSL_ERR_NOERROR){
-			        invalido = 1;	//Dados coletados sao invalidos
-                               // printf("Dados invalidos na DAQ.\n");
-			}
-				
-		        msg->tensao[i]   = valor;
+    for (i=0; i<16; i++)
+        {        
+            ret = getChannelVolts(i, &valor);
+            
+            if (ret != SSL_ERR_NOERROR){
+                    invalido = 1;    //Dados coletados sao invalidos
+	    }
+            
+            msg->tensao[i] = valor;
 
-			valor = 0.0;
-		    
-		}
-		
-	if (invalido)
-		return 0;
-	else
-		return 1;		
+            valor = 0.0;
+            
+        }
+        
+    if (invalido)
+        return 0;
+    else
+        return 1;        
 }
 
 /*!////////////////////////////////////////////////////////////////////////////////////////////
@@ -70,23 +68,23 @@ int rt_process_daq_16(msg_daq_t* msg)
  */
 int InitHw(int base_addr, int ain_range, int aout_0_range, int aout_1_range)
 {
-	int ret_val = SSL_ERR_NOERROR;
+    int ret_val = SSL_ERR_NOERROR;
 
-	VCMDAS1.initialized = SSL_TRUE;
-	VCMDAS1.ain_range = ain_range;
-    	VCMDAS1.ain_offset = 0;
-    	VCMDAS1.ain_gain = 0;
-	VCMDAS1.aout_range[0] = aout_0_range;
-    	VCMDAS1.aout_range[1] = aout_1_range;
-	VCMDAS1.aout_offset[0] = 0;
-	VCMDAS1.aout_offset[1] = 0;
-	VCMDAS1.aout_gain[0] = 0;
-	VCMDAS1.aout_gain[1] = 0;
-			
-	if (ResetCard())
-		ret_val = SSL_ERR_TIMEOUT;
+    VCMDAS1.initialized = SSL_TRUE;
+    VCMDAS1.ain_range = ain_range;
+        VCMDAS1.ain_offset = 0;
+        VCMDAS1.ain_gain = 0;
+    VCMDAS1.aout_range[0] = aout_0_range;
+        VCMDAS1.aout_range[1] = aout_1_range;
+    VCMDAS1.aout_offset[0] = 0;
+    VCMDAS1.aout_offset[1] = 0;
+    VCMDAS1.aout_gain[0] = 0;
+    VCMDAS1.aout_gain[1] = 0;
+            
+    if (ResetCard())
+        ret_val = SSL_ERR_TIMEOUT;
 
-	return(ret_val);
+    return(ret_val);
 }
 
 
@@ -105,7 +103,7 @@ int InitHw(int base_addr, int ain_range, int aout_0_range, int aout_1_range)
  *  - Scan Range Limit = Unrestricted       ------------
  *  - A/D Interrupts Disabled               - All Channels set to Input
  *  - A/D Interrupt Request Cleared         - Parallel Interrupts Disabled
- *                  												- Parallel Interrupt Request Cleared
+ *                                                                  - Parallel Interrupt Request Cleared
  *  EEPROM
  *  ------
  *  - Enables writes to the EEPROM
@@ -118,20 +116,20 @@ int InitHw(int base_addr, int ain_range, int aout_0_range, int aout_1_range)
 */
 int ResetCard()
 {
-	short data;
-	int ret_val;
+    short data;
+    int ret_val;
 
    /*---------------------------
     * reset control register to
     * power-on value
     *---------------------------*/
-	SSL_OUT(BASE_ADRESS+CONTROL, 0);
+    SSL_OUT(BASE_ADRESS+CONTROL, 0);
 
-	/*---------------------------
+    /*---------------------------
     * reset analog input
     *---------------------------*/
-	SSL_OUT(BASE_ADRESS, 0);
-	ret_val = AnaIn(0, &data);
+    SSL_OUT(BASE_ADRESS, 0);
+    ret_val = AnaIn(0, &data);
 
  return (ret_val);
 }
@@ -151,75 +149,75 @@ int ResetCard()
 */
 int AnaIn(int channel, short *code)
 {
-	 unsigned int done;
-	 unsigned int timedout;
-	 short data;
+     unsigned int done;
+     unsigned int timedout;
+     short data;
 
-	/*---------------------------
-	*  select channel and start the conversion
-	*---------------------------*/
-	SSL_OUT(BASE_ADRESS+SELECT, channel);
-	SSL_OUT(BASE_ADRESS+CONVERT, 0x01);
+    /*---------------------------
+    *  select channel and start the conversion
+    *---------------------------*/
+    SSL_OUT(BASE_ADRESS+SELECT, channel);
+    SSL_OUT(BASE_ADRESS+CONVERT, 0x01);
 
-	/*---------------------------
-	*  wait for conversion with a timeout loop
-	*---------------------------*/
-	done = SSL_IN(BASE_ADRESS+STATUS) & DONE_BIT;
+    /*---------------------------
+    *  wait for conversion with a timeout loop
+    *---------------------------*/
+    done = SSL_IN(BASE_ADRESS+STATUS) & DONE_BIT;
 
-	for( timedout = 8000; !done && timedout; timedout-- )
-		done = SSL_IN(BASE_ADRESS + STATUS) & DONE_BIT;
+    for( timedout = 8000; !done && timedout; timedout-- )
+        done = SSL_IN(BASE_ADRESS + STATUS) & DONE_BIT;
 
-	/*---------------------------
-	*  return 16-bit data
-	*---------------------------*/
-	if (!done)
-		return SSL_ERR_TIMEOUT;
-	else
-	{
-		*code = 0;
-		
-		data = SSL_IN(BASE_ADRESS+ADCLO);
-		data = data & 0xFF;
-		*code = data;		
-		
-		data = SSL_IN(BASE_ADRESS+ADCHI);
-		data = data & 0xFF;
-		*code += (data << 8);
-	}
-	
-	*code &= 0xFFFF;
+    /*---------------------------
+    *  return 16-bit data
+    *---------------------------*/
+    if (!done)
+        return SSL_ERR_TIMEOUT;
+    else
+    {
+        *code = 0;
+        
+        data = SSL_IN(BASE_ADRESS+ADCLO);
+        data = data & 0xFF;
+        *code = data;        
+        
+        data = SSL_IN(BASE_ADRESS+ADCHI);
+        data = data & 0xFF;
+        *code += (data << 8);
+    }
+    
+    *code &= 0xFFFF;
 
-	return SSL_ERR_NOERROR;
+    return SSL_ERR_NOERROR;
 }
 
 
 /*!////////////////////////////////////////////////////////////////////////////////////////////
-	Captura o valor de um canal em volts
+    Captura o valor de um canal em volts
 
-	Input:
-	 	channel - canal
-	 	data - valor em bits
-	 	
-	Output:
-		(returns) - error code
+    Input:
+         channel - canal
+         data - valor em bits
+         
+    Output:
+        (returns) - error code
 */
 int getChannelVolts(int channel, float *volts)
 {
-	short data;
-	int ret = AnaIn(channel, &data);
-	
-	*volts = 100.0;
-	
-	switch (VCMDAS1.ain_range) 
-	{
-		case VCMDAS1_PM10:
-			*volts = (20.0f/65536.0f)*data;
-		break;
-		
-		case VCMDAS1_PM5:
-		    *volts = (10.0f/65536.0f)*data;
-	}
-         
-	return ret; // O retorno é o valor raw do canal
+    short data;
+    int ret = AnaIn(channel, &data);
+    
+    *volts = 100.0;
+    
+    switch (VCMDAS1.ain_range) 
+    {
+        case VCMDAS1_PM10:
+            *volts = (20.0f/65536.0f)*data;
+        break;
+        
+        case VCMDAS1_PM5:
+            *volts = (10.0f/65536.0f)*data;
+    }
+    
+    return ret; // O retorno é o valor raw do canal
 }
 

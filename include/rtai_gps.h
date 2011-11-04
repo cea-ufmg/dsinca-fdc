@@ -1,5 +1,5 @@
 /*
-	rtai_gps.h - garmin GPS-18x-5Hz module header
+    rtai_gps.h - garmin GPS-18x-5Hz module header
     Copyright (C) 2010  Víctor Costa da Silva Campos - kozttah@gmail.com
 
     This program is free software: you can redistribute it and/or modify

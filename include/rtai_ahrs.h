@@ -1,5 +1,5 @@
 /*
-	rtai_ahrs.h - AHRS400CD-200 module header
+    rtai_ahrs.h - AHRS400CD-200 module header
     Copyright (C) 2010  Víctor Costa da Silva Campos - kozttah@gmail.com
 
     This program is free software: you can redistribute it and/or modify
@@ -23,7 +23,7 @@
 #include "messages.h"
 
 /*--------------------------------------------------------------------------------------------
-					AHRS COMANDS AND RESPONSES
+                    AHRS COMANDS AND RESPONSES
 --------------------------------------------------------------------------------------------*/
 
 //Communication Testing Messages
@@ -44,8 +44,8 @@
 
 //Communication Mode Configuration Messages
 /*
-	For this application we'll be using the angle (vg) mode exclusively.
-	Therefore the data packets received we'll be of a single structure.
+    For this application we'll be using the angle (vg) mode exclusively.
+    Therefore the data packets received we'll be of a single structure.
 */
 //Polled Mode
 #define POLLED_MODE 0x50 //P - there is no response message
@@ -61,19 +61,19 @@
 //Serial Number
 #define QUERY_SERIAL_NUMBER 0x53 //S - will return a serial number packet
 /* 
-	Serial Number Packet:
-	0xFF - Header byte
-	SN_body - four bytes unsigned int (uint_32)
-	chk - checksum byte
+    Serial Number Packet:
+    0xFF - Header byte
+    SN_body - four bytes unsigned int (uint_32)
+    chk - checksum byte
 */
 
 //Autodetect baud rate Messages
 /*
-	Autodetect baud rate procedure:
-	Using the precofigured baud rate:
-		Send a REQUEST_BAUD message and wait for the REQUEST_BAUD_RESPONSE
-	Using the new (desired) baud rate:
-		Send a NEW_BAUD message and wait for the NEW_BAUD_RESPONSE at the new baud rate
+    Autodetect baud rate procedure:
+    Using the precofigured baud rate:
+        Send a REQUEST_BAUD message and wait for the REQUEST_BAUD_RESPONSE
+    Using the new (desired) baud rate:
+        Send a NEW_BAUD message and wait for the NEW_BAUD_RESPONSE at the new baud rate
 */
 #define REQUEST_BAUD 0x62 //b
 #define REQUEST_BAUD_RESPONSE 0x42 //B
@@ -99,7 +99,7 @@
 #define AHRS_MSG_LEN 29 //header not included (crc included)
 
 /*--------------------------------------------------------------------------------------------
-					AHRS DATA CONVERSION
+                    AHRS DATA CONVERSION
 --------------------------------------------------------------------------------------------*/
 
 //Conversion constants
@@ -126,24 +126,24 @@
 #define AHRS_RAW2ACCEL(Araw) (Araw*G_RANGE*1.5/32768.0)
 
 /*--------------------------------------------------------------------------------------------
-					AHRS COMMUNICATION DEFAULTS
+                    AHRS COMMUNICATION DEFAULTS
 
-	RS-232
-	baud rate - 38400 (default)
-	8 data bits
-	1 start bit
-	1 stop bit
-	no parity
-	no handshake (flow control)
+    RS-232
+    baud rate - 38400 (default)
+    8 data bits
+    1 start bit
+    1 stop bit
+    no parity
+    no handshake (flow control)
 --------------------------------------------------------------------------------------------*/
 #define AHRS_DEFAULT_BAUD 38400
 
 /*--------------------------------------------------------------------------------------------
-					AHRS CONSTANTS AND GLOBAL VARIABLES
+                    AHRS CONSTANTS AND GLOBAL VARIABLES
 --------------------------------------------------------------------------------------------*/
 
 // Defines the ahrs task period to 20 ms (50 Hz)
-#define AHRS_PERIOD	20	
+#define AHRS_PERIOD    20    
 
 // Standard sampling period time
 #define A_MILLI_SECOND 1000000
@@ -161,7 +161,7 @@ msg_ahrs_t global_msg_ahrs;
 int global_new_data = 0;
 
 /*--------------------------------------------------------------------------------------------
-					AHRS FUNCTIONS
+                    AHRS FUNCTIONS
 --------------------------------------------------------------------------------------------*/
 // Opens the AHRS communication
 int rt_open_ahrs(void);

@@ -1,5 +1,5 @@
 /*
-	rtai_nav.h - wireless pitot tube module header
+    rtai_nav.h - wireless pitot tube module header
     Copyright (C) 2010  Víctor Costa da Silva Campos - kozttah@gmail.com
 
     This program is free software: you can redistribute it and/or modify
@@ -28,7 +28,7 @@
 
 
 /*--------------------------------------------------------------------------------------------
-					PITOT DATA CONVERSION
+                    PITOT DATA CONVERSION
 --------------------------------------------------------------------------------------------*/
 
 //Conversion macros
@@ -52,25 +52,25 @@
 int convert_temp_int_data(unsigned char msb,unsigned char lsb);
 
 /*--------------------------------------------------------------------------------------------
-					PITOT COMMUNICATION DEFAULTS
+                    PITOT COMMUNICATION DEFAULTS
 
-	RS-232
-	baud rate - 9600 (default)
-	8 data bits
-	1 start bit
-	1 stop bit
-	no parity
-	no handshake (flow control)
+    RS-232
+    baud rate - 9600 (default)
+    8 data bits
+    1 start bit
+    1 stop bit
+    no parity
+    no handshake (flow control)
 --------------------------------------------------------------------------------------------*/
 #define PITOT_DEFAULT_BAUD 9600
 #define PITOT_MSG_LEN 11
 
 /*--------------------------------------------------------------------------------------------
-					PITOT CONSTANTS AND GLOBAL VARIABLES
+                    PITOT CONSTANTS AND GLOBAL VARIABLES
 --------------------------------------------------------------------------------------------*/
 
 // Defines the pitot task period to 20 ms (50 Hz)
-#define PITOT_PERIOD	20	
+#define PITOT_PERIOD    20    
 
 // Standard sampling period time
 #define A_MILLI_SECOND 1000000
@@ -88,7 +88,7 @@ msg_pitot_t global_msg_pitot;
 int global_new_data_pitot = 0;
 
 /*--------------------------------------------------------------------------------------------
-					PITOT FUNCTIONS
+                    PITOT FUNCTIONS
 --------------------------------------------------------------------------------------------*/
 // Opens the PITOT communication and configures it
 int rt_open_pitot(void);

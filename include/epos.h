@@ -126,42 +126,42 @@ enum {
 
 inline int epos_fault_reset(u8 nodeid){
   return epos_write_object(EPOS_CONTROL_WORD_INDEX, 0,
-			   nodeid, EPOS_FAULT_RESET_CMD);
+               nodeid, EPOS_FAULT_RESET_CMD);
 }
 
 inline int epos_shutdown(u8 nodeid){
   return epos_write_object(EPOS_CONTROL_WORD_INDEX, 0,
-			   nodeid, EPOS_SHUTDOWN_CMD);
+               nodeid, EPOS_SHUTDOWN_CMD);
 }
 
 inline int epos_switch_on(u8 nodeid){
   return epos_write_object(EPOS_CONTROL_WORD_INDEX, 0,
-			   nodeid, EPOS_SWITCH_ON_CMD);
+               nodeid, EPOS_SWITCH_ON_CMD);
 }
 
 inline int epos_enable_operation(u8 nodeid){
   return epos_write_object(EPOS_CONTROL_WORD_INDEX, 0,
-			   nodeid, EPOS_ENABLE_OPERATION_CMD);
+               nodeid, EPOS_ENABLE_OPERATION_CMD);
 }
 
 inline int epos_halt(u8 nodeid){
   return epos_write_object(EPOS_CONTROL_WORD_INDEX, 0,
-			   nodeid, EPOS_HALT_CMD);
+               nodeid, EPOS_HALT_CMD);
 }
 
 inline int epos_goto_position_rel(u8 nodeid){
   return epos_write_object(EPOS_CONTROL_WORD_INDEX, 0,
-			   nodeid, EPOS_GOTO_POSITION_REL_CMD);
+               nodeid, EPOS_GOTO_POSITION_REL_CMD);
 }
 
 inline int epos_goto_position_abs(u8 nodeid){
   return epos_write_object(EPOS_CONTROL_WORD_INDEX, 0,
-			   nodeid, EPOS_GOTO_POSITION_ABS_CMD);
+               nodeid, EPOS_GOTO_POSITION_ABS_CMD);
 }
 
 inline int epos_goto_velocity(u8 nodeid){
   return epos_write_object(EPOS_CONTROL_WORD_INDEX, 0,
-			   nodeid, EPOS_GOTO_VELOCITY_CMD);
+               nodeid, EPOS_GOTO_VELOCITY_CMD);
 }
 
 typedef enum {

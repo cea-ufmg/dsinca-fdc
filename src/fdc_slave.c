@@ -3,13 +3,13 @@
 
 Programa para aquisicao de dados  - fdc_slave 
 
-	Este programa efetua a coleta de dados da placa de aquisicao de dados do modulo PC104,
+    Este programa efetua a coleta de dados da placa de aquisicao de dados do modulo PC104,
 do sistema de atitude e referência de direção (AHRS) e do modulo gps, tambem do PC104, e 
 coloca estes dados em fifos de tempo real, de onde serao lidos por um outro processo que roda
 fora do kernel do linux.
 Alem disso, os dados tambem sao colocados em uma fila serial para a transmissao via modem para
 uma estacao de solo.
-	A frequencia de execussao da tarefa de tempo real e de 50 Hz, assim como a captura de dados
+    A frequencia de execussao da tarefa de tempo real e de 50 Hz, assim como a captura de dados
 da placa DAQ de da IMU. O GPS roda a 1 Hz, e a transmissao via modem sera de 10 Hz.
 
 *********************************************************************************************
@@ -22,511 +22,511 @@ MODULE_LICENSE("GPL");
 
 // Estrutura de variaveis globais ao modulo de tempo real
 struct {
-	// variaveis globais do modulo
-	RT_TASK task_slave;
+    // variaveis globais do modulo
+    RT_TASK task_slave;
 
-	// Sinaliza o fim da tarefa	
-	int volatile end_slave;
-	
-	// Variavel global do modem
-	msg_modem_t msgModem;
+    // Sinaliza o fim da tarefa    
+    int volatile end_slave;
+    
+    // Variavel global do modem
+    msg_modem_t msgModem;
 } global;
 
 /*!*******************************************************************************************
 *********************************************************************************************/
-///				FUNCAO DA PLACA DAQ
+///                FUNCAO DA PLACA DAQ
 /*!*******************************************************************************************
 *********************************************************************************************/
-/*	Esta funcao coleta os dados da placa DAQ, preenche a estrutura da mensagem a ser
+/*    Esta funcao coleta os dados da placa DAQ, preenche a estrutura da mensagem a ser
 enviada via modem e coloca os dados na fila de tempo real da placa daq:
-	INT daq_enable determina se a coleta de dados da placa daq esta ativa. */
+    INT daq_enable determina se a coleta de dados da placa daq esta ativa. */
 static void rt_func_daq(configure *config)
 {
-	msg_daq_t msg;// Tipo utilizados para a transmissao da mensagem
-	
+    msg_daq_t msg;// Tipo utilizados para a transmissao da mensagem
+    
 
-	if (config->daq_enable) { // Se estiver habilitada a coleta de dados
+    if (config->daq_enable) { // Se estiver habilitada a coleta de dados
 
-		// Captura os dados dos 16 canais e retorna a validade destes dados
-		msg.validade = rt_process_daq_16(&msg);
+        // Captura os dados dos 16 canais e retorna a validade destes dados
+        msg.validade = rt_process_daq_16(&msg);
 
-		msg.time_sys = rt_get_time_ns(); // Pega o tempo de coleta dos dados
+        msg.time_sys = rt_get_time_ns(); // Pega o tempo de coleta dos dados
 
-		// Completa a mensagem do modem
-		//for (i=0;i<16;i++)
-		//	global.msgModem.tensao[i] = msg.tensao[i];
+        // Completa a mensagem do modem
+        //for (i=0;i<16;i++)
+        //    global.msgModem.tensao[i] = msg.tensao[i];
 
-		rtf_put(RT_FIFO_DAQ, &msg, sizeof(msg)); //Poem na fila
-	}
-	return (void)0;
+        rtf_put(RT_FIFO_DAQ, &msg, sizeof(msg)); //Poem na fila
+    }
+    return (void)0;
 }
 
 /*!*******************************************************************************************
 *********************************************************************************************/
-///				FUNCAO DO GPS
+///                FUNCAO DO GPS
 /*!*******************************************************************************************
 *********************************************************************************************/
-/*	Esta funcao coleta os dados do modulo GPS, preenche a estrutura da mensagem a ser enviada
+/*    Esta funcao coleta os dados do modulo GPS, preenche a estrutura da mensagem a ser enviada
 via modem e coloca os dados na fila de tempo real do gps. */
 static void rt_func_gps(configure* config)
 {
-	msg_gps_t msg; // Tipo da mensagem do gps
+    msg_gps_t msg; // Tipo da mensagem do gps
 
-	if (config->gps_enable){ // Caso a coleta de dados do gps esteja habilitada
+    if (config->gps_enable){ // Caso a coleta de dados do gps esteja habilitada
 
-		// Captura os dados do gps e retorna a validade destes dados
-		//msg.validade = rt_process_GPS_data(&msg);
-		rt_get_gps_data(&msg);
+        // Captura os dados do gps e retorna a validade destes dados
+        //msg.validade = rt_process_GPS_data(&msg);
+        rt_get_gps_data(&msg);
 
-		msg.time_sys = rt_get_time_ns(); // Pega o tempo de coleta dos dados
-	
-		/*// Completando a mensagem do modem com dados do gps
-		global.msgModem.latitude	= msg.latitude;
-		global.msgModem.longitude 	= msg.longitude;
-		global.msgModem.altitude 	= msg.altitude;
-		global.msgModem.hdop 		= msg.hdop;
-		global.msgModem.geoid_separation= msg.geoid_separation;
-		global.msgModem.north_south 	= msg.north_south;
-		global.msgModem.east_west 	= msg.east_west;
-		global.msgModem.n_satellites 	= msg.n_satellites;*/
-		
-		rtf_put(RT_FIFO_GPS, &msg, sizeof(msg)); //Poe na fila
-	}
-	return (void)0;
+        msg.time_sys = rt_get_time_ns(); // Pega o tempo de coleta dos dados
+    
+        /*// Completando a mensagem do modem com dados do gps
+        global.msgModem.latitude    = msg.latitude;
+        global.msgModem.longitude     = msg.longitude;
+        global.msgModem.altitude     = msg.altitude;
+        global.msgModem.hdop         = msg.hdop;
+        global.msgModem.geoid_separation= msg.geoid_separation;
+        global.msgModem.north_south     = msg.north_south;
+        global.msgModem.east_west     = msg.east_west;
+        global.msgModem.n_satellites     = msg.n_satellites;*/
+        
+        rtf_put(RT_FIFO_GPS, &msg, sizeof(msg)); //Poe na fila
+    }
+    return (void)0;
 }
 
 /*
- * 				FUNCAO DO AHRS
- * 	Esta função coleta os dados do ahrs e os coloca na fila de tempo real do ahrs
+ *                 FUNCAO DO AHRS
+ *     Esta função coleta os dados do ahrs e os coloca na fila de tempo real do ahrs
  *
  */
 static void rt_func_ahrs(configure* config){
-	msg_ahrs_t msg; // tipo de mensagem do ahrs
-	//Se a coleta de dados do ahrs estiver ativa
-	if(config->ahrs_enable) {
-		msg.validade = rt_get_ahrs_data(&msg); //Busca os dados do ahrs
-		msg.time_sys = rt_get_time_ns(); //Pega o tempo de coleta dos dados
-		rtf_put(RT_FIFO_AHRS, &msg, sizeof(msg)); // poe na fila
-	}
-	return (void)0;
+    msg_ahrs_t msg; // tipo de mensagem do ahrs
+    //Se a coleta de dados do ahrs estiver ativa
+    if(config->ahrs_enable) {
+        msg.validade = rt_get_ahrs_data(&msg); //Busca os dados do ahrs
+        msg.time_sys = rt_get_time_ns(); //Pega o tempo de coleta dos dados
+        rtf_put(RT_FIFO_AHRS, &msg, sizeof(msg)); // poe na fila
+    }
+    return (void)0;
 }
 
 /*
- * 				FUNCAO DO NAV
- * 	Esta função coleta os dados do nav e os coloca na fila de tempo real do nav
+ *                 FUNCAO DO NAV
+ *     Esta função coleta os dados do nav e os coloca na fila de tempo real do nav
  *
  */
 static void rt_func_nav(configure* config){
-	msg_nav_t msg; // tipo de mensagem do nav
-	//Se a coleta de dados do ahrs estiver ativa
-	if(config->nav_enable) {
-		msg.validade = rt_get_nav_data(&msg); //Busca os dados do nav
-		msg.time_sys = rt_get_time_ns(); //Pega o tempo de coleta dos dados
-		rtf_put(RT_FIFO_NAV, &msg, sizeof(msg)); // poe na fila
-	}
-	return (void)0;
+    msg_nav_t msg; // tipo de mensagem do nav
+    //Se a coleta de dados do ahrs estiver ativa
+    if(config->nav_enable) {
+        msg.validade = rt_get_nav_data(&msg); //Busca os dados do nav
+        msg.time_sys = rt_get_time_ns(); //Pega o tempo de coleta dos dados
+        rtf_put(RT_FIFO_NAV, &msg, sizeof(msg)); // poe na fila
+    }
+    return (void)0;
 }
 
 /*
- * 				FUNCAO DO PITOT
- * 	Esta função coleta os dados do pitot e os coloca na fila de tempo real do pitot
+ *                 FUNCAO DO PITOT
+ *     Esta função coleta os dados do pitot e os coloca na fila de tempo real do pitot
  *
  */
 static void rt_func_pitot(configure* config){
-	msg_pitot_t msg; // tipo de mensagem do pitot
-	//Se a coleta de dados do ahrs estiver ativa
-	if(config->pitot_enable) {
-		msg.validade = rt_get_pitot_data(&msg); //Busca os dados do nav
-		msg.time_sys = rt_get_time_ns(); //Pega o tempo de coleta dos dados
-		rtf_put(RT_FIFO_PITOT, &msg, sizeof(msg)); // poe na fila
-	}
-	return (void)0;
+    msg_pitot_t msg; // tipo de mensagem do pitot
+    //Se a coleta de dados do ahrs estiver ativa
+    if(config->pitot_enable) {
+        msg.validade = rt_get_pitot_data(&msg); //Busca os dados do nav
+        msg.time_sys = rt_get_time_ns(); //Pega o tempo de coleta dos dados
+        rtf_put(RT_FIFO_PITOT, &msg, sizeof(msg)); // poe na fila
+    }
+    return (void)0;
 }
 
 /*!*******************************************************************************************
 *********************************************************************************************/
-///			FUNCAO DE TRANSMISSAO DO MODEM
+///            FUNCAO DE TRANSMISSAO DO MODEM
 /*!*******************************************************************************************
 *********************************************************************************************/
-/*	Esta funcao e chamada quando se deseja transmitir um conjunto de dados por meio do link
+/*    Esta funcao e chamada quando se deseja transmitir um conjunto de dados por meio do link
 de radio. Neste ponto, a estrutura de dados do modem ja foi preenchida pelas outras funcoes
 bastando agora transmiti-la. */
 /*static void rt_func_modem(configure *config)
 {
-	char *msgbuf; 	// Utilizado no calculo de CRC
-	char *crc;	// Recebe o resultado do CRC
-	char sync0 = SYNC_SER_0, sync1 = SYNC_SER_1; // Inicializa os caracteres de sincronismo serial
-	unsigned short	CRC;	// Recebe o resultado do CRC
+    char *msgbuf;     // Utilizado no calculo de CRC
+    char *crc;    // Recebe o resultado do CRC
+    char sync0 = SYNC_SER_0, sync1 = SYNC_SER_1; // Inicializa os caracteres de sincronismo serial
+    unsigned short    CRC;    // Recebe o resultado do CRC
 
-	if (config->modem_enable) {	
-		// Completa a mensagem com o time-stamp
-		global.msgModem.time_sys = rt_get_time_ns();
-		
-		// Completa a mensagem com o numero do pacote enviado
-		global.msgModem.count_packets = ((global.msgModem.count_packets + 1) % MAX_PACKETS_LOST);
-	
-		// Transforma a estrutura num vetor de caracteres
-		msgbuf = (char *) &(global.msgModem);
-		
-		// Calcula o CRC da mensagem completa e coloca num buffer de char
-		// Os dois bytes de sincronismo nao entram no calculo
-		CRC = CRC16(msgbuf,sizeof(msg_modem_t));
-		crc = (char *)(&CRC);
-	
-		// Transmite o primeiro byte de sincronismo
-		if (rt_spwrite(MODEM_PORT, &sync0, sizeof(char)) != 0) {
-			return (void)1; // Nao transmitiu todos os caracteres
-		}
-		// Transmite o segundo byte de sincronismo
-		if (rt_spwrite(MODEM_PORT, &sync1, sizeof(char)) != 0) {
-			return (void)1; // Nao transmitiu todos os caracteres
-		}
-		// Transmite a mensagem do modem atraves da serial
-		if (rt_spwrite(MODEM_PORT, msgbuf, sizeof(msg_modem_t)) != 0) {
-			return (void)1; // Nao transmitiu todos os caracteres
-		}
-		// Transmite o CRC da mensagem
-		if (rt_spwrite(MODEM_PORT, crc, sizeof(unsigned short)) != 0) {
-			return (void)1; // Nao transmitiu todos os caracteres
-		}		
-	} //end if
-	return (void)0;
+    if (config->modem_enable) {    
+        // Completa a mensagem com o time-stamp
+        global.msgModem.time_sys = rt_get_time_ns();
+        
+        // Completa a mensagem com o numero do pacote enviado
+        global.msgModem.count_packets = ((global.msgModem.count_packets + 1) % MAX_PACKETS_LOST);
+    
+        // Transforma a estrutura num vetor de caracteres
+        msgbuf = (char *) &(global.msgModem);
+        
+        // Calcula o CRC da mensagem completa e coloca num buffer de char
+        // Os dois bytes de sincronismo nao entram no calculo
+        CRC = CRC16(msgbuf,sizeof(msg_modem_t));
+        crc = (char *)(&CRC);
+    
+        // Transmite o primeiro byte de sincronismo
+        if (rt_spwrite(MODEM_PORT, &sync0, sizeof(char)) != 0) {
+            return (void)1; // Nao transmitiu todos os caracteres
+        }
+        // Transmite o segundo byte de sincronismo
+        if (rt_spwrite(MODEM_PORT, &sync1, sizeof(char)) != 0) {
+            return (void)1; // Nao transmitiu todos os caracteres
+        }
+        // Transmite a mensagem do modem atraves da serial
+        if (rt_spwrite(MODEM_PORT, msgbuf, sizeof(msg_modem_t)) != 0) {
+            return (void)1; // Nao transmitiu todos os caracteres
+        }
+        // Transmite o CRC da mensagem
+        if (rt_spwrite(MODEM_PORT, crc, sizeof(unsigned short)) != 0) {
+            return (void)1; // Nao transmitiu todos os caracteres
+        }        
+    } //end if
+    return (void)0;
 }
 */
 /*!*******************************************************************************************
 *********************************************************************************************/
-///			FUNCAO DE RECEBIMENTO DO MODEM
+///            FUNCAO DE RECEBIMENTO DO MODEM
 /*!*******************************************************************************************
 *********************************************************************************************/
 /*static void rt_func_modem_recev()
 {
-	char ch;	// Recebe os comandos via modem
+    char ch;    // Recebe os comandos via modem
 
-	// Le o primeiro byte de sincronismo
-	if (rt_spread(MODEM_PORT, &ch, sizeof(char)) != 0)
-		return (void)1; 
-	if (ch != SYNC_SER_0)
-		return (void)1; 
-	
-	// Le o segundo byte de sincronismo
-	if (rt_spread(MODEM_PORT, &ch, sizeof(char)) != 0)
-		return (void)1; 
-	if (ch != SYNC_SER_1)
-		return (void)1; 
-	
-	// Le o comando desejado
-	if (rt_spread(MODEM_PORT, &ch, sizeof(char)) != 0) 
-		return (void)1; 
-	
-	switch (ch) {	// Envia o comando para o uav_jedi
-		case START_CMD:
-			rtf_put(RT_FIFO_COMAND, &ch, sizeof(char)); //Poe na fila
-		break;
-		
-		case STOP_CMD:
-			rtf_put(RT_FIFO_COMAND, &ch, sizeof(char)); //Poe na fila
-		break;
-		
-		case RESET_GPS_CMD:
-			rtf_put(RT_FIFO_COMAND, &ch, sizeof(char)); //Poe na fila
-		break;
-		
-		default:
-		break;
-	}
-	return (void)0;
+    // Le o primeiro byte de sincronismo
+    if (rt_spread(MODEM_PORT, &ch, sizeof(char)) != 0)
+        return (void)1; 
+    if (ch != SYNC_SER_0)
+        return (void)1; 
+    
+    // Le o segundo byte de sincronismo
+    if (rt_spread(MODEM_PORT, &ch, sizeof(char)) != 0)
+        return (void)1; 
+    if (ch != SYNC_SER_1)
+        return (void)1; 
+    
+    // Le o comando desejado
+    if (rt_spread(MODEM_PORT, &ch, sizeof(char)) != 0) 
+        return (void)1; 
+    
+    switch (ch) {    // Envia o comando para o uav_jedi
+        case START_CMD:
+            rtf_put(RT_FIFO_COMAND, &ch, sizeof(char)); //Poe na fila
+        break;
+        
+        case STOP_CMD:
+            rtf_put(RT_FIFO_COMAND, &ch, sizeof(char)); //Poe na fila
+        break;
+        
+        case RESET_GPS_CMD:
+            rtf_put(RT_FIFO_COMAND, &ch, sizeof(char)); //Poe na fila
+        break;
+        
+        default:
+        break;
+    }
+    return (void)0;
 }
 */
 /*!*******************************************************************************************
 *********************************************************************************************/
-///			THREAD DE TEMPO REAL DE CONTROLE
+///            THREAD DE TEMPO REAL DE CONTROLE
 /*!*******************************************************************************************
 *********************************************************************************************/
-/*	Esta funcao trata os comandos de controle enviados pelo programa mestre (fdc_master) e
+/*    Esta funcao trata os comandos de controle enviados pelo programa mestre (fdc_master) e
 reporta a este a resposta ao comando por meio da fifo de status.*/
 static int rt_func_control(configure * config)
 {
-	int n;
-	cmd_status_t result;
-	cmd_msg_t from_master; // Messagem do tipo parser_cmd_msg_t, porem sem o topico de caracters
+    int n;
+    cmd_status_t result;
+    cmd_msg_t from_master; // Messagem do tipo parser_cmd_msg_t, porem sem o topico de caracters
 
 
-	// Le a fifo de comunicacao entre 'fdc_master' e 'fdc_slave'.
-	// Somente leh os bytes se os mesmos compuserem uma mensagem completa.
-	n = rtf_get(RT_FIFO_CONTROL, &from_master, sizeof(from_master)); //Le da fila de controle
+    // Le a fifo de comunicacao entre 'fdc_master' e 'fdc_slave'.
+    // Somente leh os bytes se os mesmos compuserem uma mensagem completa.
+    n = rtf_get(RT_FIFO_CONTROL, &from_master, sizeof(from_master)); //Le da fila de controle
 
-	if (n == sizeof(from_master)) { // Trata a mensagem recebida
-		switch (from_master.cmd) {
-			case START:
-				// Habilita todas as funcoes do modulo
-				config->daq_enable   = 1;
-				config->gps_enable   = 1;
-				config->ahrs_enable  = 1;
-				config->nav_enable	 = 1;
-				config->pitot_enable = 1;
-				//config->modem_enable = 1;
-				
-				// Reseta a UART do modulo MSI-P600, limpando
-				// os buffers de transmissao e de recepcao.
-				//rt_init_uarts_gps();
-				
-				result = OK;
-			break;
-	
-			case STOP:
-				// Desabilita todas as funcoes do modulo
-				config->daq_enable   = 0;
-				config->gps_enable   = 0;
-				config->ahrs_enable  = 0;
-				config->nav_enable   = 0;
-				config->pitot_enable = 0;
-				//config->modem_enable = 0;
-				
-				result = OK;
-			break;
-	
-			case QUIT:
-				// Finaliza o sistema de aquisicao e controle do UAV.
-				global.end_slave = 1; // Seta o fim da tarefa de tempo real
-				
-				result = OK;
-			break;
-			
-			case NODATA:
-				// Cancela a coleta de dados de algum dispositivo
-				if (from_master.option == DAQ)
-					config->daq_enable = 0;
-				if (from_master.option == GPS)
-					config->gps_enable = 0;
-				if (from_master.option == AHRS)
-					config->ahrs_enable = 0;
-				if (from_master.option == NAV)
-					config->nav_enable = 0;
-				if (from_master.option == PITOT)
-					config->pitot_enable = 0;
-				result = OK;
-			break;
-	
-			case IS_ALIVE:
-				// Apenas verifica se o modulo de tempo real esta vivo
-				result = OK; // Estou vivo
-			break;
-			
-			case RESET_GPS:
-				// Reseta o modulo gps
-				rt_request_gps_reset();
-				result = OK;
-			break;
-			
-			default: 
-				result = NOT_OK;
-			break;
-		} // end switch
-		
-		//Poe na fila de status o resultado do comando
-		if (rtf_put(RT_FIFO_STATUS, &result, sizeof(result)) == sizeof(result))
-			return 0; // Sucesso
-		else {
-			result = NOT_OK; 
-			rtf_put(RT_FIFO_STATUS, &result, sizeof(result)); 
-			return 1; // Fracasso
-		}
-	} // end if
-	
-	return 1; // Fracasso
+    if (n == sizeof(from_master)) { // Trata a mensagem recebida
+        switch (from_master.cmd) {
+            case START:
+                // Habilita todas as funcoes do modulo
+                config->daq_enable   = 1;
+                config->gps_enable   = 1;
+                config->ahrs_enable  = 1;
+                config->nav_enable     = 1;
+                config->pitot_enable = 1;
+                //config->modem_enable = 1;
+                
+                // Reseta a UART do modulo MSI-P600, limpando
+                // os buffers de transmissao e de recepcao.
+                //rt_init_uarts_gps();
+                
+                result = OK;
+            break;
+    
+            case STOP:
+                // Desabilita todas as funcoes do modulo
+                config->daq_enable   = 0;
+                config->gps_enable   = 0;
+                config->ahrs_enable  = 0;
+                config->nav_enable   = 0;
+                config->pitot_enable = 0;
+                //config->modem_enable = 0;
+                
+                result = OK;
+            break;
+    
+            case QUIT:
+                // Finaliza o sistema de aquisicao e controle do UAV.
+                global.end_slave = 1; // Seta o fim da tarefa de tempo real
+                
+                result = OK;
+            break;
+            
+            case NODATA:
+                // Cancela a coleta de dados de algum dispositivo
+                if (from_master.option == DAQ)
+                    config->daq_enable = 0;
+                if (from_master.option == GPS)
+                    config->gps_enable = 0;
+                if (from_master.option == AHRS)
+                    config->ahrs_enable = 0;
+                if (from_master.option == NAV)
+                    config->nav_enable = 0;
+                if (from_master.option == PITOT)
+                    config->pitot_enable = 0;
+                result = OK;
+            break;
+    
+            case IS_ALIVE:
+                // Apenas verifica se o modulo de tempo real esta vivo
+                result = OK; // Estou vivo
+            break;
+            
+            case RESET_GPS:
+                // Reseta o modulo gps
+                rt_request_gps_reset();
+                result = OK;
+            break;
+            
+            default: 
+                result = NOT_OK;
+            break;
+        } // end switch
+        
+        //Poe na fila de status o resultado do comando
+        if (rtf_put(RT_FIFO_STATUS, &result, sizeof(result)) == sizeof(result))
+            return 0; // Sucesso
+        else {
+            result = NOT_OK; 
+            rtf_put(RT_FIFO_STATUS, &result, sizeof(result)); 
+            return 1; // Fracasso
+        }
+    } // end if
+    
+    return 1; // Fracasso
 }
 /*!*******************************************************************************************
 *********************************************************************************************/
-///				THREAD DE TEMPO REAL PRINCIPAL
+///                THREAD DE TEMPO REAL PRINCIPAL
 /*!*******************************************************************************************
 *********************************************************************************************/
-/*	Funcao da tarefa de tempo real, que simula um comportamento multi-tarefa dos dispositivos
+/*    Funcao da tarefa de tempo real, que simula um comportamento multi-tarefa dos dispositivos
 a serem manipulados, da transmissao via modem e das comunicacoes entre os processos por meio
 das fifos de controle e de status.*/
 static void func_fdc_slave(int t)
 {
-	// Contadores que definem o periodo de cada funcao
-	int count_gps = 0;
+    // Contadores que definem o periodo de cada funcao
+    int count_gps = 0;
         // int count_modem = 0, count_modem_recev = 0;
 
-	configure config; // Configuracao de execucao do modulo fdc_slave
+    configure config; // Configuracao de execucao do modulo fdc_slave
 
-	// Desabilita todos os dispositivos
-	config.daq_enable   = 0;
-	config.gps_enable   = 0;
-	config.ahrs_enable  = 0;
-	config.nav_enable	= 0;
-	config.pitot_enable = 0;
-	//config.modem_enable = 0;
-	//config.imu_filter   = 0;
+    // Desabilita todos os dispositivos
+    config.daq_enable   = 0;
+    config.gps_enable   = 0;
+    config.ahrs_enable  = 0;
+    config.nav_enable    = 0;
+    config.pitot_enable = 0;
+    //config.modem_enable = 0;
+    //config.imu_filter   = 0;
 
-	while (!global.end_slave) { // Enquanto nao for determinado o fim do modulo
+    while (!global.end_slave) { // Enquanto nao for determinado o fim do modulo
 
-		// Incrementa os contadores do escalonador
-		count_gps++;
-		//count_modem++;
-		//count_modem_recev++;
+        // Incrementa os contadores do escalonador
+        count_gps++;
+        //count_modem++;
+        //count_modem_recev++;
 
-		// Recebe comandos do fdc_master com uma frequencia maxima de 50 Hz
-		rt_func_control(&config);
+        // Recebe comandos do fdc_master com uma frequencia maxima de 50 Hz
+        rt_func_control(&config);
 
-		// Acessa a placa daq com uma frequencia maxima de 50 Hz
-		rt_func_daq(&config);
+        // Acessa a placa daq com uma frequencia maxima de 50 Hz
+        rt_func_daq(&config);
 
-		//Acessa o ahrs com uma frequência máxima de 50 Hz
-		rt_func_ahrs(&config);
-		
-		//Acessa o nav com uma frequência máxima de 50 Hz
-		rt_func_nav(&config);
+        //Acessa o ahrs com uma frequência máxima de 50 Hz
+        rt_func_ahrs(&config);
+        
+        //Acessa o nav com uma frequência máxima de 50 Hz
+        rt_func_nav(&config);
 
-		//Acessa o pitot com uma frequência máxima de 50 Hz
-		rt_func_pitot(&config);
+        //Acessa o pitot com uma frequência máxima de 50 Hz
+        rt_func_pitot(&config);
 
-		// Acessa o gps com uma frequencia maxima de 1 Hz	
-		if (count_gps >= _05_HZ){
-			rt_func_gps(&config);
-			count_gps = 0;
-		}
-		
-		// Acessa o modem com uma frequencia maxima ainda NAO DETERMINADA
-		//if (count_modem >= _05_HZ){
-		//	rt_func_modem(&config);	// Periodo de 10 Hz
-		//	count_modem = 0;
-		//}
-		
-		//if (count_modem_recev >= _01_HZ){
-		//	rt_func_modem_recev();
-		//	count_modem_recev = 0;
-		//}
+        // Acessa o gps com uma frequencia maxima de 1 Hz    
+        if (count_gps >= _05_HZ){
+            rt_func_gps(&config);
+            count_gps = 0;
+        }
+        
+        // Acessa o modem com uma frequencia maxima ainda NAO DETERMINADA
+        //if (count_modem >= _05_HZ){
+        //    rt_func_modem(&config);    // Periodo de 10 Hz
+        //    count_modem = 0;
+        //}
+        
+        //if (count_modem_recev >= _01_HZ){
+        //    rt_func_modem_recev();
+        //    count_modem_recev = 0;
+        //}
 
-		//Espera completar o periodo de 20 milisegundos (50 Hz)
-		rt_task_wait_period();
-	}
-	// A tarefa de tempo real se suspende esperando pelo fim
-	rt_task_suspend(&global.task_slave);
+        //Espera completar o periodo de 20 milisegundos (50 Hz)
+        rt_task_wait_period();
+    }
+    // A tarefa de tempo real se suspende esperando pelo fim
+    rt_task_suspend(&global.task_slave);
 
-	return (void)0;
+    return (void)0;
 }
 /*!*******************************************************************************************
 *********************************************************************************************/
-///			FUNCAO DE TERMINO DO MODULO
+///            FUNCAO DE TERMINO DO MODULO
 /*!*******************************************************************************************
 *********************************************************************************************/
-/*	Funcao que determina o fim do modulo de tempo real */
+/*    Funcao que determina o fim do modulo de tempo real */
 int terminate_module(void)
 {
-	global.end_slave = 1;	// Seta o fim da tarefa de tempo real
+    global.end_slave = 1;    // Seta o fim da tarefa de tempo real
 
-	stop_rt_timer(); 		//Para o tempo
-	
-	// Fecha os dispositivos utilizados
-	//rt_close_serial(MODEM_PORT);
-	rt_task_delete(&global.task_slave);	//Termina a tarefa de tempo real principal	
+    stop_rt_timer();         //Para o tempo
+    
+    // Fecha os dispositivos utilizados
+    //rt_close_serial(MODEM_PORT);
+    rt_task_delete(&global.task_slave);    //Termina a tarefa de tempo real principal    
 
-	rtf_destroy(RT_FIFO_AHRS);
-	rtf_destroy(RT_FIFO_DAQ);
-	rtf_destroy(RT_FIFO_GPS);
-	rtf_destroy(RT_FIFO_NAV);
-	rtf_destroy(RT_FIFO_PITOT);
-	rtf_destroy(RT_FIFO_CONTROL);
-	rtf_destroy(RT_FIFO_STATUS);
-	//rtf_destroy(RT_FIFO_COMAND);
-	
-	return 0;
+    rtf_destroy(RT_FIFO_AHRS);
+    rtf_destroy(RT_FIFO_DAQ);
+    rtf_destroy(RT_FIFO_GPS);
+    rtf_destroy(RT_FIFO_NAV);
+    rtf_destroy(RT_FIFO_PITOT);
+    rtf_destroy(RT_FIFO_CONTROL);
+    rtf_destroy(RT_FIFO_STATUS);
+    //rtf_destroy(RT_FIFO_COMAND);
+    
+    return 0;
 }
 
 /*!*******************************************************************************************
 *********************************************************************************************/
-///				INICIALIZA O MODULO
+///                INICIALIZA O MODULO
 /*!*******************************************************************************************
 *********************************************************************************************/
 int init_module(void)
 {
-	RTIME tick_period;	// Determmina o periodo da tarefa
-	RTIME now;		// Tempo atual em ns
-	int terminate = 0;	// Seta o fim do modulo caso algo falhe
+    RTIME tick_period;    // Determmina o periodo da tarefa
+    RTIME now;        // Tempo atual em ns
+    int terminate = 0;    // Seta o fim do modulo caso algo falhe
 
-	global.end_slave = 0; // Varaivel global que sinaliza o fim da tarefa de tempo real
-	
-	// Inicilaiza o contador de pacotes do modem
-	global.msgModem.count_packets = 0;
+    global.end_slave = 0; // Varaivel global que sinaliza o fim da tarefa de tempo real
+    
+    // Inicilaiza o contador de pacotes do modem
+    global.msgModem.count_packets = 0;
 
-	//Cria a fila de mensagens
+    //Cria a fila de mensagens
 
-	if (rtf_create_using_bh(RT_FIFO_AHRS,   20000, 0) < 0) {
-		rt_printk("Falha ao abrir fifo: FIFO_AHRS\n");
-		terminate = 1;
-	}
-	if (rtf_create_using_bh(RT_FIFO_DAQ, 	20000, 0) < 0) {
-		rt_printk("Falha ao abrir fifo: FIFO_DAQ\n");
-		terminate = 1;
-	}
-	if (rtf_create_using_bh(RT_FIFO_GPS, 	20000, 0) < 0) {
-		rt_printk("Falha ao abrir fifo: FIFO_GPS\n");
-		terminate = 1;
-	}
-	if (rtf_create_using_bh(RT_FIFO_NAV,   20000, 0) < 0) {
-		rt_printk("Falha ao abrir fifo: FIFO_NAV\n");
-		terminate = 1;
-	}
-	if (rtf_create_using_bh(RT_FIFO_PITOT,   20000, 0) < 0) {
-		rt_printk("Falha ao abrir fifo: FIFO_PITOT\n");
-		terminate = 1;
-	}
-	if (rtf_create_using_bh(RT_FIFO_CONTROL,20000, 0) < 0) {
-		rt_printk("Falha ao abrir fifo: FIFO_CONTROL\n");
-		terminate = 1;
-	}
-	if (rtf_create_using_bh(RT_FIFO_STATUS, 20000, 0) < 0) {
-		rt_printk("Falha ao abrir fifo: FIFO_STATUS\n");
-		terminate = 1;
-	}
-	/*if (rtf_create_using_bh(RT_FIFO_COMAND, 20000, 0) < 0) {
-		rt_printk("Falha ao abrir fifo: FIFO_STATUS\n");
-		terminate = 1;
-	}*/
-	
-	/////////////////////////////////////////////////////////////////////////////////
-	// Dispara a unica tarefa de tempo real principal
-	if (rt_task_init(&global.task_slave, func_fdc_slave, 0, 5000, TASK_PRIORITY, 0, 0) < 0) {
-		rt_printk("Falha ao criar a tarefa de tempo real\n");
-		terminate = 1;
-	}
-	/////////////////////////////////////////////////////////////////////////////////
-	// Abre e configura o Controlador de Servos 
-	/*if (rt_open_modem() < 0) {
-		rt_printk("Nao abriu o dispositivo Modem\n");
-             	terminate = 1;
+    if (rtf_create_using_bh(RT_FIFO_AHRS,   20000, 0) < 0) {
+        rt_printk("Falha ao abrir fifo: FIFO_AHRS\n");
+        terminate = 1;
+    }
+    if (rtf_create_using_bh(RT_FIFO_DAQ,     20000, 0) < 0) {
+        rt_printk("Falha ao abrir fifo: FIFO_DAQ\n");
+        terminate = 1;
+    }
+    if (rtf_create_using_bh(RT_FIFO_GPS,     20000, 0) < 0) {
+        rt_printk("Falha ao abrir fifo: FIFO_GPS\n");
+        terminate = 1;
+    }
+    if (rtf_create_using_bh(RT_FIFO_NAV,   20000, 0) < 0) {
+        rt_printk("Falha ao abrir fifo: FIFO_NAV\n");
+        terminate = 1;
+    }
+    if (rtf_create_using_bh(RT_FIFO_PITOT,   20000, 0) < 0) {
+        rt_printk("Falha ao abrir fifo: FIFO_PITOT\n");
+        terminate = 1;
+    }
+    if (rtf_create_using_bh(RT_FIFO_CONTROL,20000, 0) < 0) {
+        rt_printk("Falha ao abrir fifo: FIFO_CONTROL\n");
+        terminate = 1;
+    }
+    if (rtf_create_using_bh(RT_FIFO_STATUS, 20000, 0) < 0) {
+        rt_printk("Falha ao abrir fifo: FIFO_STATUS\n");
+        terminate = 1;
+    }
+    /*if (rtf_create_using_bh(RT_FIFO_COMAND, 20000, 0) < 0) {
+        rt_printk("Falha ao abrir fifo: FIFO_STATUS\n");
+        terminate = 1;
+    }*/
+    
+    /////////////////////////////////////////////////////////////////////////////////
+    // Dispara a unica tarefa de tempo real principal
+    if (rt_task_init(&global.task_slave, func_fdc_slave, 0, 5000, TASK_PRIORITY, 0, 0) < 0) {
+        rt_printk("Falha ao criar a tarefa de tempo real\n");
+        terminate = 1;
+    }
+    /////////////////////////////////////////////////////////////////////////////////
+    // Abre e configura o Controlador de Servos 
+    /*if (rt_open_modem() < 0) {
+        rt_printk("Nao abriu o dispositivo Modem\n");
+                 terminate = 1;
         }*/
-	/////////////////////////////////////////////////////////////////////////////////
-	// Determina o periodo de execucao da tarefa como sendo multiplo de 1 ms (PERIOD* 1 ms)
-	tick_period = PERIOD*start_rt_timer(nano2count(UM_MILI_SEGUNDO));
-	now = rt_get_time();
-	
-	//Inicia a tarefa principal periodicamente
-	if (rt_task_make_periodic(&global.task_slave, now + tick_period, tick_period) < 0) {
-		rt_printk("Nao consegui lancar tarefa de tempo real periodicamente\n");
-            	terminate = 1;
-	}
-	
-	if (terminate == 1)
-		terminate_module();
-	else	
-		rt_printk("\nMODULO FDC_SLAVE\n");
+    /////////////////////////////////////////////////////////////////////////////////
+    // Determina o periodo de execucao da tarefa como sendo multiplo de 1 ms (PERIOD* 1 ms)
+    tick_period = PERIOD*start_rt_timer(nano2count(UM_MILI_SEGUNDO));
+    now = rt_get_time();
+    
+    //Inicia a tarefa principal periodicamente
+    if (rt_task_make_periodic(&global.task_slave, now + tick_period, tick_period) < 0) {
+        rt_printk("Nao consegui lancar tarefa de tempo real periodicamente\n");
+                terminate = 1;
+    }
+    
+    if (terminate == 1)
+        terminate_module();
+    else    
+        rt_printk("\nMODULO FDC_SLAVE\n");
 
-	rt_busy_sleep(1000000000);
+    rt_busy_sleep(1000000000);
 
-	return 0;
+    return 0;
 } 
 /*!*******************************************************************************************
 *********************************************************************************************/
-///				FINALIZA MODULO
+///                FINALIZA MODULO
 /*!*******************************************************************************************
 *********************************************************************************************/
 int cleanup_module(void)
 {
-	terminate_module();
-	rt_printk("FIM DO MODULO FDC_SLAVE\n");
-	
-	return 0;
+    terminate_module();
+    rt_printk("FIM DO MODULO FDC_SLAVE\n");
+    
+    return 0;
 }
