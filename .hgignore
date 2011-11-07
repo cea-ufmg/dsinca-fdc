@@ -1,3 +1,6 @@
+syntax: glob
+
 fdc_cmd_parser
 fdc_master
 object
+*.pyc
