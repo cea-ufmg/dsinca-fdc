@@ -24,9 +24,11 @@
 
 #include <stdint.h>
 
+#include <asm/div64.h>
 #include <linux/crc7.h>
 #include <linux/init.h>
 #include <linux/module.h>
+#include <linux/time.h>
 
 #include <rtai_sched.h>
 #include <rtai_serial.h>
@@ -58,25 +60,6 @@ MODULE_PARM_DESC (baud, "The baud rate. Integer value (default 115200)");
 static void errmsg(char * msg);
 
 /** Module code **/
-struct modem_msg_t {
-  int16_t header;
-  float daq[16];
-  float gps_latitude, gps_longitude, gps_altitude;
-  float gps_nvel, gps_evel, gps_dvel;
-  float nav_angle[3];
-  float nav_gyro[3];
-  float nav_accel[3];
-  float nav_nvel, nav_evel, nav_dvel;
-  float nav_latitude, nav_longitude, nav_altitude;
-  float pitot_static;
-  float pitot_temperature;
-  float pitot_dynamic;
-  float pitot_aoa;
-  float pitot_sideslip;
-  int64_t tstamp;
-  uint8_t crc;
-} modem_msg = {0x4d54};
-
 static int __init modem_init() {
   int err;
   
@@ -93,7 +76,7 @@ static int __init modem_init() {
     errmsg("Serial port already in use.");
     goto spopen_fail;
   }
-
+  
  spopen_fail: return err;
 }
 
@@ -105,22 +88,46 @@ static void __exit modem_cleanup() {
 module_init(modem_init);
 module_exit(modem_cleanup);
 
-void modem_set_daq_data(const msg_daq_t *daq_msg){
-  int i;
-  for (i=0; i<16; i++)
-    modem_msg.daq[i] = daq_msg->tensao[i];
+void modem_send_daq_data(const msg_daq_t *daq_msg){
+  u8 crc;
+  uint16_t header = 0x4441; //The characters "AD"
+  int32_t timestamp;//The "uptime" in microseconds
+
+  if (rt_spget_txfrbs(ser_port) < 2 + 4*16 + 8 + 1) {
+    errmsg("serial buffer full.");
+    return;
+  }
+
+  {
+    int64_t time_sys = daq_msg->time_sys;
+    do_div(time_sys, 1000000);
+    timestamp = (int32_t) time_sys;
+  }
+
+  rt_spwrite(ser_port, (char*)&header, -sizeof(header));
+  rt_spwrite(ser_port, (char*)daq_msg->tensao, -sizeof(daq_msg->tensao));
+  rt_spwrite(ser_port, (char*)&timestamp, -sizeof(timestamp));
+
+  crc = crc7(0, (u8*) &header, sizeof(header));
+  crc = crc7(crc, (u8*) daq_msg->tensao, sizeof(daq_msg->tensao));
+  crc = crc7(crc, (u8*) &timestamp, sizeof(timestamp));
+  
+  rt_spwrite(ser_port, (char*)&crc, -sizeof(crc));
 }
 
-void modem_set_gps_data(const msg_gps_t *gps_msg){
+void modem_send_gps_data(const msg_gps_t *gps_msg){
+  /*
   modem_msg.gps_latitude = gps_msg->latitude;
   modem_msg.gps_longitude = gps_msg->longitude;
   modem_msg.gps_altitude = gps_msg->altitude;
   modem_msg.gps_nvel = gps_msg->north_v;
   modem_msg.gps_evel = gps_msg->east_v;
   modem_msg.gps_dvel = -gps_msg->up_v;
+  */
 }
 
-void modem_set_nav_data(const msg_nav_t *nav_msg){
+void modem_send_nav_data(const msg_nav_t *nav_msg){
+  /*
   memcpy(&modem_msg.nav_angle, &nav_msg->angle, sizeof(modem_msg.nav_angle));
   memcpy(&modem_msg.nav_gyro, &nav_msg->gyro, sizeof(modem_msg.nav_gyro));
   memcpy(&modem_msg.nav_accel, &nav_msg->accel, sizeof(modem_msg.nav_accel));
@@ -132,22 +139,27 @@ void modem_set_nav_data(const msg_nav_t *nav_msg){
   modem_msg.nav_latitude = nav_msg->latitude;
   modem_msg.nav_longitude = nav_msg->longitude;
   modem_msg.nav_altitude = nav_msg->altitude;
+  */
 }
 
-void modem_set_pitot_data(const msg_pitot_t *pitot_msg){
+void modem_send_pitot_data(const msg_pitot_t *pitot_msg){
+  /*
   modem_msg.pitot_static = pitot_msg->static_pressure;
   modem_msg.pitot_temperature = pitot_msg->temperature;
   modem_msg.pitot_dynamic = pitot_msg->dynamic_pressure;
   modem_msg.pitot_aoa = pitot_msg->attack_angle;
   modem_msg.pitot_sideslip = pitot_msg->sideslip_angle;
+  */
 }
 
 void modem_transmit(){
+  /*
   modem_msg.tstamp = rt_get_time_ns();
   modem_msg.crc = crc7(0, (u8*) &modem_msg, sizeof(modem_msg) - 1);
   
   if (rt_spwrite(ser_port, (char*)&modem_msg, -sizeof(modem_msg)))
     errmsg("serial buffer full.");
+  */
 }
 
 

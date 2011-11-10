@@ -51,7 +51,7 @@ static void rt_func_daq(configure *config)
         msg.time_sys = rt_get_time_ns(); // Pega o tempo de coleta dos dados
 	
         rtf_put(RT_FIFO_DAQ, &msg, sizeof(msg)); //Poem na fila
-	modem_set_daq_data(&msg);
+	if (config->modem_enable) modem_send_daq_data(&msg);
     }
     return (void)0;
 }
@@ -75,7 +75,7 @@ static void rt_func_gps(configure* config)
         msg.time_sys = rt_get_time_ns(); // Pega o tempo de coleta dos dados
 	
         rtf_put(RT_FIFO_GPS, &msg, sizeof(msg)); //Poe na fila
-	modem_set_gps_data(&msg);
+	if (config->modem_enable) modem_send_gps_data(&msg);
     }
 }
 
@@ -107,7 +107,7 @@ static void rt_func_nav(configure* config){
         msg.validade = rt_get_nav_data(&msg); //Busca os dados do nav
         msg.time_sys = rt_get_time_ns(); //Pega o tempo de coleta dos dados
         rtf_put(RT_FIFO_NAV, &msg, sizeof(msg)); // poe na fila
-	modem_set_nav_data(&msg);
+	if (config->modem_enable) modem_send_nav_data(&msg);
     }
     
     return (void)0;
@@ -125,7 +125,7 @@ static void rt_func_pitot(configure* config){
         msg.validade = rt_get_pitot_data(&msg); //Busca os dados do nav
         msg.time_sys = rt_get_time_ns(); //Pega o tempo de coleta dos dados
         rtf_put(RT_FIFO_PITOT, &msg, sizeof(msg)); // poe na fila
-	modem_set_pitot_data(&msg);
+	if (config->modem_enable) modem_send_pitot_data(&msg);
     }
     return (void)0;
 }
@@ -139,9 +139,6 @@ static void rt_func_pitot(configure* config){
 de radio. Neste ponto, a estrutura de dados do modem ja foi preenchida pelas outras funcoes
 bastando agora transmiti-la. */
 static void rt_func_modem(configure *config) {
-  if (config->modem_enable) {
-    modem_transmit();
-  }
 }
 
 /*!*******************************************************************************************
