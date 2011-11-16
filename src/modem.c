@@ -25,7 +25,7 @@
 #include <stdint.h>
 
 #include <asm/div64.h>
-#include <linux/crc7.h>
+#include <linux/crc8.h>
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/time.h>
@@ -56,6 +56,9 @@ MODULE_PARM_DESC (baud, "The baud rate. Integer value (default 115200)");
 #define HARDCTRL RT_SP_NO_HAND_SHAKE
 #define FIFOTRIG RT_SP_FIFO_SIZE_8
 
+//MSB-first crc-8 (polynomial x^8 + x^7 + x^6 + x^4 + x^2 + 1, a.k.a. 0xD5)
+DECLARE_CRC8_TABLE(crc_table);
+
 /** Internal functions **/
 static void errmsg(char * msg);
 
@@ -77,6 +80,8 @@ static int __init modem_init() {
     goto spopen_fail;
   }
   
+  crc8_populate_msb(crc_table, 0xD5);
+  
  spopen_fail: return err;
 }
 
@@ -93,7 +98,7 @@ void modem_send_daq_data(const msg_daq_t *daq_msg){
   uint16_t header = 0x4441; //The characters "AD"
   int32_t timestamp;//The "uptime" in microseconds
 
-  if (rt_spget_txfrbs(ser_port) < 2 + 4*16 + 8 + 1) {
+  if (rt_spget_txfrbs(ser_port) < 2 + 4*16 + 4 + 1) {
     errmsg("serial buffer full.");
     return;
   }
@@ -108,9 +113,10 @@ void modem_send_daq_data(const msg_daq_t *daq_msg){
   rt_spwrite(ser_port, (char*)daq_msg->tensao, -sizeof(daq_msg->tensao));
   rt_spwrite(ser_port, (char*)&timestamp, -sizeof(timestamp));
 
-  crc = crc7(0, (u8*) &header, sizeof(header));
-  crc = crc7(crc, (u8*) daq_msg->tensao, sizeof(daq_msg->tensao));
-  crc = crc7(crc, (u8*) &timestamp, sizeof(timestamp));
+  crc = crc8(crc_table, (u8*) &header, sizeof(header), 0);
+  printk("header crc: %d\n", (int)crc);
+  crc = crc8(crc_table, (u8*) daq_msg->tensao, sizeof(daq_msg->tensao), crc);
+  crc = crc8(crc_table, (u8*) &timestamp, sizeof(timestamp), crc);
   
   rt_spwrite(ser_port, (char*)&crc, -sizeof(crc));
 }

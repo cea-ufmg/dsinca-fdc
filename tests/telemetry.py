@@ -2,47 +2,51 @@
 
 '''Reads telemetry from the flight data computer's modem.'''
 
-from ctypes import c_float, c_uint8, c_int16, c_int64, Structure
+from __future__ import print_function
+
+from ctypes import c_float, c_uint8, c_int32, Structure
 from io import open, SEEK_CUR
 
-class ModemMsg(Structure):
-    _fields_ = [('daq', c_float * 16),
-                ('gps_latitude', c_float),
-                ('gps_longitude', c_float),
-                ('gps_altitude', c_float),
-                ('gps_nvel', c_float),
-                ('gps_evel', c_float),
-                ('gps_dvel', c_float),
-                ('nav_angle', c_float * 3),
-                ('nav_gyro', c_float * 3),
-                ('nav_accel', c_float * 3),
-                ('nav_nvel', c_float),
-                ('nav_evel', c_float),
-                ('nav_dvel', c_float),
-                ('nav_latitude', c_float),
-                ('nav_longitude', c_float),
-                ('nav_altitude', c_float),
-                ('pitot_static', c_float),
-                ('pitot_temperature', c_float),
-                ('pitot_dynamic', c_float),
-                ('pitot_aoa', c_float),
-                ('pitot_sideslip', c_float),
-                ('tstamp', c_int64),
+import crcmod
+
+crc8 = crcmod.mkCrcFun(0x1D5, rev=False, initCrc=0)
+
+def crc_valid(msg):
+    payload = msg.header + memoryview(msg).tobytes()[:-1]
+    return msg.crc == crc8(payload)
+
+class DAqMsg(Structure):
+    header = b'AD'
+    _pack_ = 1
+    _fields_ = [('channel', c_float * 16),
+                ('timestamp', c_int32),
                 ('crc', c_uint8)]
+    
+    def dict(self):
+        return dict((name, getattr(self,name)) for name,ctype in self._fields_)
+
+
+headers = dict([msg.header, msg] for msg in (DAqMsg,))
+
 
 def read_modem(port):
     h1,h0 = port.read(2)
-    while h1+h0 != 'TM':
+    while h1+h0 not in headers.keys():
         h1 = h0
         h0 = port.read(1)
     
-    #Consume the padding
-    port.read(2)
-    
-    msg = ModemMsg()
+    msg = headers[h1+h0]()
     port.readinto(msg)
     
     return msg
 
+
 if __name__ == '__main__':
     port = open('/dev/ttyUSB0', 'rb')
+    while True:
+        msg = read_modem(port)
+        if crc_valid(msg):
+            print("valid, timestamp:",msg.timestamp)
+        else:
+            print("INvalid!!!!! timestamp:",msg.timestamp)
+    

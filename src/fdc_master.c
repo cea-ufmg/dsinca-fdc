@@ -916,8 +916,8 @@ int load_modules (void)
         master_log(ERROR_LOG, "Inicialize: Falha ao carregar modulo rtai_serial");
     if (system("modprobe rtai_fifos") < 0)
         master_log(ERROR_LOG, "Inicialize: Falha ao carregar modulo rtai_fifos");
-    if (system("modprobe crc7") < 0)
-        master_log(ERROR_LOG, "Inicialize: Falha ao carregar modulo crc7");
+    if (system("modprobe crc8") < 0)
+        master_log(ERROR_LOG, "Inicialize: Falha ao carregar modulo crc8");
     
     if (system("insmod ./object/rtai_daq.o") < 0)
         master_log(ERROR_LOG, "Inicialize: Falha ao carregar modulo rtai_daq");
