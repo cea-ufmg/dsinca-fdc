@@ -14,7 +14,7 @@
 
 #define PORTS_PER_CARD     16
 
-#define BASE_ADRESS        0x300    /* Endereco da placa*/
+#define BASE_ADRESS     0x3E0    /* Endereco da placa*/
 #define CARD            0
 
 #define STATUS          0x00    /*  Read port */

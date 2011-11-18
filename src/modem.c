@@ -114,7 +114,6 @@ void modem_send_daq_data(const msg_daq_t *daq_msg){
   rt_spwrite(ser_port, (char*)&timestamp, -sizeof(timestamp));
 
   crc = crc8(crc_table, (u8*) &header, sizeof(header), 0);
-  printk("header crc: %d\n", (int)crc);
   crc = crc8(crc_table, (u8*) daq_msg->tensao, sizeof(daq_msg->tensao), crc);
   crc = crc8(crc_table, (u8*) &timestamp, sizeof(timestamp), crc);
   
