@@ -93,9 +93,42 @@ static void __exit modem_cleanup() {
 module_init(modem_init);
 module_exit(modem_cleanup);
 
+void modem_send_ahrs_data(const msg_ahrs_t *ahrs_msg){
+  u8 crc;
+  uint16_t header = 0x4241; //The characters "AH" (little endian)
+  int32_t timestamp;//The "uptime" in microseconds
+
+  if (rt_spget_txfrbs(ser_port) < 2 + 4*3*4 + 4 + 1) {
+    errmsg("serial buffer full.");
+    return;
+  }
+
+  {
+    int64_t time_sys = ahrs_msg->time_sys;
+    do_div(time_sys, 1000000);
+    timestamp = (int32_t) time_sys;
+  }
+
+  rt_spwrite(ser_port, (char*)&header, -sizeof(header));
+  rt_spwrite(ser_port, (char*)ahrs_msg->angle, -sizeof(ahrs_msg->angle));
+  rt_spwrite(ser_port, (char*)ahrs_msg->gyro, -sizeof(ahrs_msg->gyro));
+  rt_spwrite(ser_port, (char*)ahrs_msg->accel, -sizeof(ahrs_msg->accel));
+  rt_spwrite(ser_port, (char*)ahrs_msg->magnet, -sizeof(ahrs_msg->magnet));
+  rt_spwrite(ser_port, (char*)&timestamp, -sizeof(timestamp));
+
+  crc = crc8(crc_table, (u8*) &header, sizeof(header), 0);
+  crc = crc8(crc_table, (u8*) ahrs_msg->angle, sizeof(ahrs_msg->angle), crc);
+  crc = crc8(crc_table, (u8*) ahrs_msg->gyro, sizeof(ahrs_msg->gyro), crc);
+  crc = crc8(crc_table, (u8*) ahrs_msg->accel, sizeof(ahrs_msg->accel), crc);
+  crc = crc8(crc_table, (u8*) ahrs_msg->magnet, sizeof(ahrs_msg->magnet), crc);
+  crc = crc8(crc_table, (u8*) &timestamp, sizeof(timestamp), crc);
+  
+  rt_spwrite(ser_port, (char*)&crc, -sizeof(crc));
+}
+
 void modem_send_daq_data(const msg_daq_t *daq_msg){
   u8 crc;
-  uint16_t header = 0x4441; //The characters "AD"
+  uint16_t header = 0x4441; //The characters "AD" (little endian)
   int32_t timestamp;//The "uptime" in microseconds
 
   if (rt_spget_txfrbs(ser_port) < 2 + 4*16 + 4 + 1) {
@@ -121,52 +154,129 @@ void modem_send_daq_data(const msg_daq_t *daq_msg){
 }
 
 void modem_send_gps_data(const msg_gps_t *gps_msg){
-  /*
-  modem_msg.gps_latitude = gps_msg->latitude;
-  modem_msg.gps_longitude = gps_msg->longitude;
-  modem_msg.gps_altitude = gps_msg->altitude;
-  modem_msg.gps_nvel = gps_msg->north_v;
-  modem_msg.gps_evel = gps_msg->east_v;
-  modem_msg.gps_dvel = -gps_msg->up_v;
-  */
+  u8 crc;
+  uint16_t header = 0x5047; //The characters "GP" (little endian)
+  int32_t timestamp;//The "uptime" in microseconds
+
+  if (rt_spget_txfrbs(ser_port) < 2 + 4*6 + 4 + 1) {
+    errmsg("serial buffer full.");
+    return;
+  }
+
+  {
+    int64_t time_sys = gps_msg->time_sys;
+    do_div(time_sys, 1000000);
+    timestamp = (int32_t) time_sys;
+  }
+
+  rt_spwrite(ser_port, (char*)&header, -sizeof(header));
+  rt_spwrite(ser_port, (char*)&gps_msg->latitude, -sizeof(gps_msg->latitude));
+  rt_spwrite(ser_port, (char*)&gps_msg->longitude, -sizeof(gps_msg->longitude));
+  rt_spwrite(ser_port, (char*)&gps_msg->altitude, -sizeof(gps_msg->altitude));
+  rt_spwrite(ser_port, (char*)&gps_msg->north_v, -sizeof(gps_msg->north_v));
+  rt_spwrite(ser_port, (char*)&gps_msg->east_v, -sizeof(gps_msg->east_v));
+  rt_spwrite(ser_port, (char*)&gps_msg->up_v, -sizeof(gps_msg->up_v));
+  rt_spwrite(ser_port, (char*)&timestamp, -sizeof(timestamp));
+
+  crc = crc8(crc_table,(u8*)&header, sizeof(header), 0);
+  crc = crc8(crc_table,(u8*)&gps_msg->latitude,sizeof(gps_msg->latitude),crc);
+  crc = crc8(crc_table,(u8*)&gps_msg->longitude,sizeof(gps_msg->longitude),crc);
+  crc = crc8(crc_table,(u8*)&gps_msg->altitude, sizeof(gps_msg->altitude), crc);
+  crc = crc8(crc_table,(u8*)&gps_msg->north_v, sizeof(gps_msg->north_v), crc);
+  crc = crc8(crc_table,(u8*)&gps_msg->east_v, sizeof(gps_msg->east_v), crc);
+  crc = crc8(crc_table,(u8*)&gps_msg->up_v, sizeof(gps_msg->up_v), crc);
+  crc = crc8(crc_table,(u8*)&timestamp, sizeof(timestamp), crc);
+  
+  rt_spwrite(ser_port, (char*)&crc, -sizeof(crc));
 }
 
 void modem_send_nav_data(const msg_nav_t *nav_msg){
-  /*
-  memcpy(&modem_msg.nav_angle, &nav_msg->angle, sizeof(modem_msg.nav_angle));
-  memcpy(&modem_msg.nav_gyro, &nav_msg->gyro, sizeof(modem_msg.nav_gyro));
-  memcpy(&modem_msg.nav_accel, &nav_msg->accel, sizeof(modem_msg.nav_accel));
+  u8 crc;
+  uint16_t header = 0x564e; //The characters "NV" (little endian)
+  int32_t timestamp;//The "uptime" in microseconds
+
+  if (rt_spget_txfrbs(ser_port) < 2 + 4*3*5 + 4 + 1) {
+    errmsg("serial buffer full.");
+    return;
+  }
+
+  {
+    int64_t time_sys = nav_msg->time_sys;
+    do_div(time_sys, 1000000);
+    timestamp = (int32_t) time_sys;
+  }
+
+  rt_spwrite(ser_port, (char*)&header, -sizeof(header));
+  rt_spwrite(ser_port, (char*)nav_msg->angle, -sizeof(nav_msg->angle));
+  rt_spwrite(ser_port, (char*)nav_msg->gyro, -sizeof(nav_msg->gyro));
+  rt_spwrite(ser_port, (char*)nav_msg->accel, -sizeof(nav_msg->accel));
+  rt_spwrite(ser_port, (char*)&nav_msg->nVel, -sizeof(nav_msg->nVel));
+  rt_spwrite(ser_port, (char*)&nav_msg->eVel, -sizeof(nav_msg->eVel));
+  rt_spwrite(ser_port, (char*)&nav_msg->dVel, -sizeof(nav_msg->dVel));
+  rt_spwrite(ser_port, (char*)&nav_msg->latitude, -sizeof(nav_msg->latitude));
+  rt_spwrite(ser_port, (char*)&nav_msg->longitude, -sizeof(nav_msg->longitude));
+  rt_spwrite(ser_port, (char*)&nav_msg->altitude, -sizeof(nav_msg->altitude));
+  rt_spwrite(ser_port, (char*)&timestamp, -sizeof(timestamp));
+
+  crc = crc8(crc_table, (u8*) &header, sizeof(header), 0);
+  crc = crc8(crc_table, (u8*) nav_msg->angle, sizeof(nav_msg->angle), crc);
+  crc = crc8(crc_table, (u8*) nav_msg->gyro, sizeof(nav_msg->gyro), crc);
+  crc = crc8(crc_table, (u8*) nav_msg->accel, sizeof(nav_msg->accel), crc);
+  crc = crc8(crc_table, (u8*) &nav_msg->nVel, sizeof(nav_msg->nVel), crc);
+  crc = crc8(crc_table, (u8*) &nav_msg->eVel, sizeof(nav_msg->eVel), crc);
+  crc = crc8(crc_table, (u8*) &nav_msg->dVel, sizeof(nav_msg->dVel), crc);
+  crc = crc8(crc_table,(u8*)&nav_msg->latitude,sizeof(nav_msg->latitude),crc);
+  crc = crc8(crc_table,(u8*)&nav_msg->longitude,sizeof(nav_msg->longitude),crc);
+  crc = crc8(crc_table,(u8*)&nav_msg->altitude,sizeof(nav_msg->altitude),crc);
+  crc = crc8(crc_table, (u8*) &timestamp, sizeof(timestamp), crc);
   
-  modem_msg.nav_nvel = nav_msg->nVel;
-  modem_msg.nav_evel = nav_msg->eVel;
-  modem_msg.nav_dvel = nav_msg->dVel;
-  
-  modem_msg.nav_latitude = nav_msg->latitude;
-  modem_msg.nav_longitude = nav_msg->longitude;
-  modem_msg.nav_altitude = nav_msg->altitude;
-  */
+  rt_spwrite(ser_port, (char*)&crc, -sizeof(crc));
 }
 
 void modem_send_pitot_data(const msg_pitot_t *pitot_msg){
-  /*
-  modem_msg.pitot_static = pitot_msg->static_pressure;
-  modem_msg.pitot_temperature = pitot_msg->temperature;
-  modem_msg.pitot_dynamic = pitot_msg->dynamic_pressure;
-  modem_msg.pitot_aoa = pitot_msg->attack_angle;
-  modem_msg.pitot_sideslip = pitot_msg->sideslip_angle;
-  */
-}
+  u8 crc;
+  uint16_t header = 0x5450; //The characters "PT" (little endian)
+  int32_t timestamp;//The "uptime" in microseconds
 
-void modem_transmit(){
-  /*
-  modem_msg.tstamp = rt_get_time_ns();
-  modem_msg.crc = crc7(0, (u8*) &modem_msg, sizeof(modem_msg) - 1);
-  
-  if (rt_spwrite(ser_port, (char*)&modem_msg, -sizeof(modem_msg)))
+  if (rt_spget_txfrbs(ser_port) < 2 + 4*5 + 4 + 1) {
     errmsg("serial buffer full.");
-  */
-}
+    return;
+  }
 
+  {
+    int64_t time_sys = pitot_msg->time_sys;
+    do_div(time_sys, 1000000);
+    timestamp = (int32_t) time_sys;
+  }
+
+  rt_spwrite(ser_port, (char*)&header, -sizeof(header));
+  rt_spwrite(ser_port, (char*)&pitot_msg->static_pressure,
+	     -sizeof(pitot_msg->static_pressure));
+  rt_spwrite(ser_port, (char*)&pitot_msg->temperature,
+	     -sizeof(pitot_msg->temperature));
+  rt_spwrite(ser_port, (char*)&pitot_msg->dynamic_pressure,
+	     -sizeof(pitot_msg->dynamic_pressure));
+  rt_spwrite(ser_port, (char*)&pitot_msg->attack_angle,
+	     -sizeof(pitot_msg->attack_angle));
+  rt_spwrite(ser_port, (char*)&pitot_msg->sideslip_angle,
+	     -sizeof(pitot_msg->sideslip_angle));
+  rt_spwrite(ser_port, (char*)&timestamp, -sizeof(timestamp));
+
+  crc = crc8(crc_table, (u8*) &header, sizeof(header), 0);
+  crc = crc8(crc_table, (u8*) &pitot_msg->static_pressure,
+	     sizeof(pitot_msg->static_pressure), crc);
+  crc = crc8(crc_table, (u8*) &pitot_msg->temperature,
+	     sizeof(pitot_msg->temperature), crc);
+  crc = crc8(crc_table, (u8*) &pitot_msg->dynamic_pressure,
+	     sizeof(pitot_msg->dynamic_pressure), crc);
+  crc = crc8(crc_table, (u8*) &pitot_msg->attack_angle,
+	     sizeof(pitot_msg->attack_angle), crc);
+  crc = crc8(crc_table, (u8*) &pitot_msg->sideslip_angle,
+	     sizeof(pitot_msg->sideslip_angle), crc);
+  crc = crc8(crc_table, (u8*) &timestamp, sizeof(timestamp), crc);
+  
+  rt_spwrite(ser_port, (char*)&crc, -sizeof(crc));
+}
 
 static void errmsg(char* msg){
   printk("Modem driver: %s\n",msg);

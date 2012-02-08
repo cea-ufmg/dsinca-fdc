@@ -21,6 +21,7 @@
 
 #include "messages.h"
 
+void modem_send_ahrs_data(const msg_ahrs_t *);
 void modem_send_daq_data(const msg_daq_t *);
 void modem_send_gps_data(const msg_gps_t *);
 void modem_send_nav_data(const msg_nav_t *);

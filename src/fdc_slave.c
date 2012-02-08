@@ -91,6 +91,7 @@ static void rt_func_ahrs(configure* config){
         msg.validade = rt_get_ahrs_data(&msg); //Busca os dados do ahrs
         msg.time_sys = rt_get_time_ns(); //Pega o tempo de coleta dos dados
         rtf_put(RT_FIFO_AHRS, &msg, sizeof(msg)); // poe na fila
+	if (config->modem_enable) modem_send_ahrs_data(&msg);
     }
     return (void)0;
 }
