@@ -13,6 +13,7 @@
 #define GPS_PORT        1
 #define NAV_PORT        2
 #define PITOT_PORT      3
+#define EPOS_PORT       4
 #define MODEM_PORT      5
 
 /*!*******************************************************************************************

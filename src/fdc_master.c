@@ -931,7 +931,8 @@ int load_modules (void)
         master_log(ERROR_LOG, "Inicialize: Falha ao carregar modulo rtai_pitot");
     if (system("insmod ./object/modem.o") < 0)
         master_log(ERROR_LOG, "Inicialize: Falha ao carregar modulo modem");
-    
+    if (system("insmod ./object/epos.o") < 0)
+        master_log(ERROR_LOG, "Inicialize: Falha ao carregar modulo epos");
     if (system("insmod ./object/fdc_slave.o") < 0)
         master_log(ERROR_LOG, "Inicialize: Falha ao carregar modulo fdc_slave");
     
@@ -964,6 +965,8 @@ int unload_modules (void)
         master_log(ERROR_LOG, "Terminate: Falha ao descarregar modulo rtai_daq");
     if (system("rmmod modem") < 0)
         master_log(ERROR_LOG, "Terminate: Falha ao descarregar modulo modem");
+    if (system("rmmod epos") < 0)
+        master_log(ERROR_LOG, "Terminate: Falha ao descarregar modulo epos");
     
     /*
     if (system("rmmod rtai_fifos") < 0)

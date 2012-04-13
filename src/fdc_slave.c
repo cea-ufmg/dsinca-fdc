@@ -16,6 +16,7 @@ da placa DAQ de da IMU. O GPS roda a 1 Hz, e a transmissao via modem sera de 10 
 ********************************************************************************************/
 #include "fdc_slave.h"
 #include "modem.h"
+#include "epos.h"
 
 MODULE_AUTHOR("Armando Alves Neto e Guilheme A. S. Pereira");
 MODULE_DESCRIPTION("RTAI real time data acquisition");
@@ -280,6 +281,49 @@ static int rt_func_control(configure * config)
     
     return 1; // Fracasso
 }
+
+void rt_func_servos(configure *config){
+  static enum {
+    INIT_FAULT_RESET,
+    INIT_SHUTDOWN,
+    INIT_SWITCH_ON,
+    INIT_ENABLE_OPERATION,
+    INIT_SET_MODE,
+    INITIALIZED
+  } init_state = INIT_FAULT_RESET;
+
+  if (init_state != INITIALIZED) {
+    switch (init_state) {
+    case INIT_FAULT_RESET:
+      if (!epos_fault_reset(0))
+	init_state++;
+      break;
+    case INIT_SHUTDOWN:
+      if (!epos_shutdown(0))
+	init_state++;
+      break;
+    case INIT_SWITCH_ON:
+      if (!epos_switch_on(0))
+	init_state++;      
+      break;
+    case INIT_ENABLE_OPERATION:
+      if (!epos_enable_operation(0))
+	init_state++;
+      break;
+    case INIT_SET_MODE:
+      if (!epos_set_mode(0, EPOS_VELOCITY_MODE))
+	init_state++;
+      break;
+    default:
+    }
+  } else{
+    msg_nav_t msg;
+    rt_get_nav_data(&msg);
+    
+    //epos_set_velocity(0, msg.angle[0]*10);
+  }
+}
+
 /*!*******************************************************************************************
 *********************************************************************************************/
 ///                THREAD DE TEMPO REAL PRINCIPAL
@@ -334,6 +378,8 @@ static void func_fdc_slave(int t)
 	//Escreve os dados do modem
 	rt_func_modem(&config);
         
+	//Manda o comando para os servos
+	rt_func_servos(&config);
         
         //if (count_modem_recev >= _01_HZ){
         //    rt_func_modem_recev();
