@@ -22,6 +22,17 @@ MODULE_AUTHOR("Armando Alves Neto e Guilheme A. S. Pereira");
 MODULE_DESCRIPTION("RTAI real time data acquisition");
 MODULE_LICENSE("GPL");
 
+static msg_daq_t daq_msg;
+static msg_nav_t nav_msg;
+
+static enum {
+  CONTROL_FOLLOW,
+  CONTROL_PITCH
+} control_mode = CONTROL_PITCH;
+
+static int pitch_prop_gain = 5000;
+static int pitch_deriv_gain = 0;
+
 // Estrutura de variaveis globais ao modulo de tempo real
 struct {
     // variaveis globais do modulo
@@ -41,20 +52,16 @@ enviada via modem e coloca os dados na fila de tempo real da placa daq:
     INT daq_enable determina se a coleta de dados da placa daq esta ativa. */
 static void rt_func_daq(configure *config)
 {
-    msg_daq_t msg;// Tipo utilizados para a transmissao da mensagem
-    
-
     if (config->daq_enable) { // Se estiver habilitada a coleta de dados
 
         // Captura os dados dos 16 canais e retorna a validade destes dados
-        msg.validade = rt_process_daq_16(&msg);
+        daq_msg.validade = rt_process_daq_16(&daq_msg);
 
-        msg.time_sys = rt_get_time_ns(); // Pega o tempo de coleta dos dados
-	
-        rtf_put(RT_FIFO_DAQ, &msg, sizeof(msg)); //Poem na fila
-	if (config->modem_enable) modem_send_daq_data(&msg);
+        daq_msg.time_sys = rt_get_time_ns(); // Pega o tempo de coleta dos dados
+     
+        rtf_put(RT_FIFO_DAQ, &daq_msg, sizeof(daq_msg)); //Poem na fila
+        if (config->modem_enable) modem_send_daq_data(&daq_msg);
     }
-    return (void)0;
 }
 
 /*!*******************************************************************************************
@@ -74,9 +81,9 @@ static void rt_func_gps(configure* config)
         rt_get_gps_data(&msg);
 
         msg.time_sys = rt_get_time_ns(); // Pega o tempo de coleta dos dados
-	
+   
         rtf_put(RT_FIFO_GPS, &msg, sizeof(msg)); //Poe na fila
-	if (config->modem_enable) modem_send_gps_data(&msg);
+   if (config->modem_enable) modem_send_gps_data(&msg);
     }
 }
 
@@ -92,7 +99,7 @@ static void rt_func_ahrs(configure* config){
         msg.validade = rt_get_ahrs_data(&msg); //Busca os dados do ahrs
         msg.time_sys = rt_get_time_ns(); //Pega o tempo de coleta dos dados
         rtf_put(RT_FIFO_AHRS, &msg, sizeof(msg)); // poe na fila
-	if (config->modem_enable) modem_send_ahrs_data(&msg);
+   if (config->modem_enable) modem_send_ahrs_data(&msg);
     }
     return (void)0;
 }
@@ -103,13 +110,12 @@ static void rt_func_ahrs(configure* config){
  *
  */
 static void rt_func_nav(configure* config){
-    msg_nav_t msg; // tipo de mensagem do nav
     //Se a coleta de dados do ahrs estiver ativa
     if(config->nav_enable) {
-        msg.validade = rt_get_nav_data(&msg); //Busca os dados do nav
-        msg.time_sys = rt_get_time_ns(); //Pega o tempo de coleta dos dados
-        rtf_put(RT_FIFO_NAV, &msg, sizeof(msg)); // poe na fila
-	if (config->modem_enable) modem_send_nav_data(&msg);
+        nav_msg.validade = rt_get_nav_data(&nav_msg); //Busca os dados do nav
+        nav_msg.time_sys = rt_get_time_ns(); //Pega o tempo de coleta dos dados
+        rtf_put(RT_FIFO_NAV, &nav_msg, sizeof(nav_msg)); // poe na fila
+        if (config->modem_enable) modem_send_nav_data(&nav_msg);
     }
     
     return (void)0;
@@ -127,7 +133,7 @@ static void rt_func_pitot(configure* config){
         msg.validade = rt_get_pitot_data(&msg); //Busca os dados do nav
         msg.time_sys = rt_get_time_ns(); //Pega o tempo de coleta dos dados
         rtf_put(RT_FIFO_PITOT, &msg, sizeof(msg)); // poe na fila
-	if (config->modem_enable) modem_send_pitot_data(&msg);
+   if (config->modem_enable) modem_send_pitot_data(&msg);
     }
     return (void)0;
 }
@@ -215,7 +221,8 @@ static int rt_func_control(configure * config)
                 config->nav_enable   = 1;
                 config->pitot_enable = 1;
                 config->modem_enable = 1;
-		
+		config->servo_enable = 1;
+      
                 result = OK;
             break;
     
@@ -227,6 +234,7 @@ static int rt_func_control(configure * config)
                 config->nav_enable   = 0;
                 config->pitot_enable = 0;
                 config->modem_enable = 0;
+		config->servo_enable = 0;
                 
                 result = OK;
             break;
@@ -282,6 +290,18 @@ static int rt_func_control(configure * config)
     return 1; // Fracasso
 }
 
+int control_action() {
+  switch (control_mode) {
+  case CONTROL_FOLLOW:
+    return (int)(daq_msg.tensao[1]*18)*5000;
+  case CONTROL_PITCH:
+    return -pitch_prop_gain*(int)nav_msg.angle[1] -
+      pitch_deriv_gain*(int)(10*nav_msg.gyro[1])/10;
+  default:
+    return 0;
+  }
+}
+
 void rt_func_servos(configure *config){
   static enum {
     INIT_FAULT_RESET,
@@ -289,38 +309,38 @@ void rt_func_servos(configure *config){
     INIT_SWITCH_ON,
     INIT_ENABLE_OPERATION,
     INIT_SET_MODE,
-    INITIALIZED
-  } init_state = INIT_FAULT_RESET;
+    SET_POSITION,
+    GOTO_POSITION
+  } servo_state = INIT_FAULT_RESET;
+  
+  if (!config->servo_enable) {
+    servo_state = INIT_FAULT_RESET;
+    return;
+  }
 
-  if (init_state != INITIALIZED) {
-    switch (init_state) {
-    case INIT_FAULT_RESET:
-      if (!epos_fault_reset(0))
-	init_state++;
-      break;
-    case INIT_SHUTDOWN:
-      if (!epos_shutdown(0))
-	init_state++;
-      break;
-    case INIT_SWITCH_ON:
-      if (!epos_switch_on(0))
-	init_state++;      
-      break;
-    case INIT_ENABLE_OPERATION:
-      if (!epos_enable_operation(0))
-	init_state++;
-      break;
-    case INIT_SET_MODE:
-      if (!epos_set_mode(0, EPOS_VELOCITY_MODE))
-	init_state++;
-      break;
-    default:
-    }
-  } else{
-    msg_nav_t msg;
-    rt_get_nav_data(&msg);
-    
-    //epos_set_velocity(0, msg.angle[0]*10);
+  switch (servo_state) {
+  case INIT_FAULT_RESET:
+    if (!epos_fault_reset(0)) servo_state++;
+    break;
+  case INIT_SHUTDOWN:
+    if (!epos_shutdown(0)) servo_state++;
+    break;
+  case INIT_SWITCH_ON:
+    if (!epos_switch_on(0)) servo_state++;
+    break;
+  case INIT_ENABLE_OPERATION:
+    if (!epos_enable_operation(0)) servo_state++;
+    break;
+  case INIT_SET_MODE:
+    if (!epos_set_mode(0, EPOS_PROFILE_POSITION_MODE))
+      servo_state++;
+    break;
+  case SET_POSITION:
+    if (!epos_set_target_position(0, control_action()))
+      servo_state++;
+  case GOTO_POSITION:
+    if (!epos_goto_position_abs(0))
+      servo_state = SET_POSITION;
   }
 }
 
@@ -375,11 +395,11 @@ static void func_fdc_slave(int t)
             count_gps = 0;
         }
 
-	//Escreve os dados do modem
-	rt_func_modem(&config);
+   //Escreve os dados do modem
+   rt_func_modem(&config);
         
-	//Manda o comando para os servos
-	rt_func_servos(&config);
+   //Manda o comando para os servos
+   rt_func_servos(&config);
         
         //if (count_modem_recev >= _01_HZ){
         //    rt_func_modem_recev();
@@ -513,3 +533,5 @@ int cleanup_module(void)
     
     return 0;
 }
+
+/// indent-tabs-mode: nil

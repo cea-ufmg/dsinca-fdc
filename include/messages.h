@@ -20,7 +20,7 @@ typedef enum {
     CHANGE,
     CHANGEDATFILE,  // Composicao de change + datfile
     CHANGETS,       // Composicao de change + ts
-     NODATA,
+    NODATA,
     ENABLEDAQ,
     DISABLEDAQ,
     ASSIGN,

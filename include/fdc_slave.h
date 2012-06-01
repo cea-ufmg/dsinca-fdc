@@ -55,16 +55,15 @@
 *********************************************************************************************/
 
 /// Estrutura de  configuracao do modulo
-typedef struct {
-    
-    // Indicadores que servem para habilitar individualmente os dispositivos ou inicializar todos    
-    int daq_enable;
-    int ahrs_enable;
-    int gps_enable;
-    int modem_enable;
-    int nav_enable;
-    int pitot_enable;
-    
+typedef struct {  
+  // Indicadores que servem para habilitar individualmente os dispositivos ou inicializar todos    
+  int daq_enable;
+  int ahrs_enable;
+  int gps_enable;
+  int modem_enable;
+  int nav_enable;
+  int pitot_enable;
+  int servo_enable;
 }  configure;
 
 static void rt_func_daq(configure* config);
