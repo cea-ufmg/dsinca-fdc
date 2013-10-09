@@ -86,7 +86,7 @@ int rt_cfg_ahrs(void)
     };
     version_info[QUERY_VERSION_LENGTH] = *("\0");
     //print it out
-    printk("Connected to the following AHRS: %s",version_info);
+    printk("Connected to the following AHRS: %s\n",version_info);
 
     // Tries to put the AHRS in ANGLE MODE 10 times, if it fails, abort execution
     int count_try;
@@ -159,18 +159,20 @@ int rt_cfg_ahrs(void)
 void func_ahrs(int t)
 {
     unsigned char msgbuf[AHRS_MSG_LEN]; //buffer for receiving the message
+    int read_status;
         
     while (1) { // while the modules doesn't terminates        
         // Tries to process incoming messages
-        global_msg_ahrs.validade = rt_process_ahrs_serial(msgbuf);
-                    
+        read_status = rt_process_ahrs_serial(msgbuf);
+	
         // if it is a valid message, updates the global variable
-        if (global_msg_ahrs.validade == 1)
+        if (read_status != -1)
         {
             //Sets the new data variable
+            global_msg_ahrs.validade = read_status;
             global_new_data = rt_convert_ahrs_data(&global_msg_ahrs, msgbuf);
         }
-        
+	
         //Waits for 20ms (50Hz)
         rt_task_wait_period();
     }
@@ -246,37 +248,44 @@ int rt_convert_ahrs_data(msg_ahrs_t* msg,unsigned char* msgbuf)
 //Gets a data packet
 int rt_process_ahrs_serial(unsigned char* MessageBuffer)
 {
-    static unsigned char state = 0;      // binary state variable (0 -> waiting for header/ 1 -> filling message)
+    static enum {
+      SEARCHING_HEADER,
+      FILLING_BUFFER
+    } state = SEARCHING_HEADER;
     int ch;            // Current byte in the serial port
+    int checksum_status;
 
     //unsigned char circBuf[AHRS_MSG_LEN]; //circular buffer for receiving the data
     //static unsigned char BufferOffset = 0; //initial point on the circular buffer
     static unsigned char MessageIndex = 0;            // Current message index
+    static unsigned char RecoverIndex = AHRS_MSG_LEN; // Index of the byte to be recovered
 
-    while (rt_bytes_avail_serial(AHRS_PORT)) // Checks if there are data available
+    while (rt_bytes_avail_serial(AHRS_PORT) || RecoverIndex < AHRS_MSG_LEN) // Checks if there are data available
     {
-        //Get a byte from the serial port.
-        ch = rt_getch_serial(AHRS_PORT);
+        //Get the next byte
+        ch = RecoverIndex < AHRS_MSG_LEN ? MessageBuffer[RecoverIndex++] : rt_getch_serial(AHRS_PORT);
         ch=ch&0xFF;
 
         switch (state)
         {
-            case 0:  //Look for the header
+            case SEARCHING_HEADER:
                 if (ch == AHRS_HEADER)
                 {
-                    state++; //we found it, so we get the rest of the message
+                    state = FILLING_BUFFER; //we found it, so we get the rest of the message
                 }
             break;
             /////////////////////////////////////////////////////////////////////////
-            case 1:  //Fill the message buffer
-                //circBuf[(MessageIndex+BufferOffset)%AHRS_MSG_LEN] = ch;  //Save the byte
-                //++MessageIndex; //updates index
+            case FILLING_BUFFER:
                 MessageBuffer[MessageIndex++] = ch; //Save the byte
                 //checks to see if we completed the message
                 if (MessageIndex == AHRS_MSG_LEN) {
-                    MessageIndex = 0; state = 0; //resets the finite state machine
+                    MessageIndex = 0; state = SEARCHING_HEADER; //resets the finite state machine
                     //checks the crc and returns 0 (failure) or 1 (success)
-                    return rt_chksum_check(MessageBuffer);
+                    checksum_status = rt_chksum_check(MessageBuffer);
+		    if (!checksum_status)
+		      RecoverIndex = 0;
+		    else 
+		      return 1;
                 }
             break;
         };
@@ -312,12 +321,11 @@ static int __rtai_ahrs_init(void)
         return -1;
         }
 
-    /*
     //Configures the device
     if (rt_cfg_ahrs() < 0) {
         rt_printk("Nao configurou o dispositivo AHRS\n");
         return -1;
-    }*/ //Uncomment these lines when using the real device
+    }
 
     // Creates the real time task
     if (rt_task_init(&task_ahrs, func_ahrs, 0, 5000, AHRS_TASK_PRIORITY, 0, 0) < 0) {
@@ -389,6 +397,9 @@ int rt_get_ahrs_data(msg_ahrs_t *msg)
 
     //Internal Time
     msg->time_stamp = global_msg_ahrs.time_stamp;
+
+    //Validade
+    msg->validade = global_msg_ahrs.validade;
     
     if (global_new_data == 1) // So it is new data
     {

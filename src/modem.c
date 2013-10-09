@@ -22,6 +22,9 @@
 
 #include "modem.h"
 
+// The file below defines the default serial port for our application
+#include "rtai_rt_serial.h"
+
 #include <stdint.h>
 
 #include <asm/div64.h>
@@ -38,7 +41,7 @@ MODULE_DESCRIPTION("Real time device driver of Maxon motor EPOS");
 MODULE_LICENSE("GPL");
 
 /** Module parameters **/
-static int ser_port = 5;
+static int ser_port = MODEM_PORT;
 MODULE_PARM (ser_port, "i");
 MODULE_PARM_DESC (ser_port, "The rtai_serial serial port number. "
           "Integer value (default 5)");
