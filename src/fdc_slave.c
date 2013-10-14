@@ -27,7 +27,8 @@ static msg_nav_t nav_msg;
 
 static enum {
   CONTROL_FOLLOW,
-  CONTROL_PITCH
+  CONTROL_PITCH,
+  CONTROL_NONE
 } control_mode = CONTROL_PITCH;
 
 static int pitch_prop_gain = 5000;
@@ -97,7 +98,6 @@ static void rt_func_ahrs(configure* config){
     //Se a coleta de dados do ahrs estiver ativa
     if(config->ahrs_enable) {
         msg.validade = rt_get_ahrs_data(&msg); //Busca os dados do ahrs
-        msg.time_sys = rt_get_time_ns(); //Pega o tempo de coleta dos dados
         rtf_put(RT_FIFO_AHRS, &msg, sizeof(msg)); // poe na fila
    if (config->modem_enable) modem_send_ahrs_data(&msg);
     }
@@ -113,7 +113,6 @@ static void rt_func_nav(configure* config){
     //Se a coleta de dados do ahrs estiver ativa
     if(config->nav_enable) {
         nav_msg.validade = rt_get_nav_data(&nav_msg); //Busca os dados do nav
-        nav_msg.time_sys = rt_get_time_ns(); //Pega o tempo de coleta dos dados
         rtf_put(RT_FIFO_NAV, &nav_msg, sizeof(nav_msg)); // poe na fila
         if (config->modem_enable) modem_send_nav_data(&nav_msg);
     }
@@ -303,6 +302,7 @@ int control_action() {
 }
 
 void rt_func_servos(configure *config){
+  
   static enum {
     INIT_FAULT_RESET,
     INIT_SHUTDOWN,
@@ -312,6 +312,9 @@ void rt_func_servos(configure *config){
     SET_POSITION,
     GOTO_POSITION
   } servo_state = INIT_FAULT_RESET;
+  
+  if (control_mode == CONTROL_NONE)
+    return;
   
   if (!config->servo_enable) {
     servo_state = INIT_FAULT_RESET;

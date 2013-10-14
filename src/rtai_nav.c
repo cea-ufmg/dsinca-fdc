@@ -39,71 +39,22 @@ int rt_open_nav(void)
         return 0;
 }
 
-// Configures the NAV
-int rt_cfg_nav(void)
+// Serial port interrupt callback
+static void serial_callback(int rxavail, int txfree)
 {
-    //Sets the NAV to quiet mode so it doesn't fill us with messages
-    //while we're trying to configure it
-    
-    //Discards available messages
-    
-    //Tries to ping the device and
-    //check if we got the right answer
-
-    //Gets the NAV version and print it on the screen
-
-    // Tries to config the NAV 10 times, if it fails, abort execution
-    int count_try;
-    for (count_try=0; count_try<10; ++count_try) {
-    };
-    //checks whether or not we were succesful
-    if (count_try >= 10) {
-        printk("[rt_cfg_nav]: não consegui configurar NAV. ");
-        return -1; //couldn't config the NAV
-    };
-
-    //if needed insert here the code to change the nav baud rate
-    //though it should be noted that the default is 38400
-    //and only 12000 are needed for the 50Hz (8*30*50)
-    
-    //Sets the NAV packet rate
-    //Discards available messages
-
-    // Tries to set the NAV packet rate 10 times, if it fails, abort execution
-    for (count_try=0; count_try<10; ++count_try) {
-    };
-    //checks whether or not we were succesful
-    if (count_try >= 10) {
-        printk("[rt_cfg_nav]: não consegui configurar o NAV");
-        return -1; //couldn't set the packet rate
-    }
-    else {
-        return 0; //success
-    };
-};
-
-// Main function executed by the NAV real time task
-void func_nav(int t)
-{
-    unsigned char msgbuf[NAV_MSG_LEN]; //buffer for receiving the message
+    static unsigned char msgbuf[NAV_MSG_LEN]; //buffer for receiving the message
         
-    while (1) { // while the modules doesn't terminates        
-        // Tries to process incoming messages
-        global_msg_nav.validade = rt_process_nav_serial(msgbuf);
-                    
-        // if it is a valid message, updates the global variable
-        if (global_msg_nav.validade == 1)
-        {
-            //Sets the new data variable
-            global_new_data_nav = rt_convert_nav_data(&global_msg_nav, msgbuf);
-        }
-        
-        //Waits for 20ms (50Hz)
-        rt_task_wait_period();
+    // Tries to process incoming messages
+    global_msg_nav.validade = rt_process_nav_serial(msgbuf);
+    
+    // if it is a valid message, updates the global variable
+    if (global_msg_nav.validade != -1)
+    {
+	//Sets the new data variable
+	global_msg_nav.time_sys = rt_get_time_ns(); //Pega o tempo de coleta dos dados
+	global_new_data_nav = rt_convert_nav_data(&global_msg_nav, msgbuf);
     }
-
-    return (void)0;
-};
+}
 
 //Transform a 2-complement word (2 bytes) to a common int
 int convert_int_data(unsigned char msb,unsigned char lsb){
@@ -118,7 +69,7 @@ int convert_int_data(unsigned char msb,unsigned char lsb){
         data = word;
     }
     return data;
-};
+}
 
 //Transform a 2-complement double word (4 bytes) to a common int
 int convert_int_data2(unsigned char msb1,unsigned char lsb1, unsigned char msb2, unsigned char lsb2){
@@ -135,7 +86,7 @@ int convert_int_data2(unsigned char msb1,unsigned char lsb1, unsigned char msb2,
         data = dword;
     }
     return data;
-};
+}
 
 //Convert the message received (msgbuf_in) to engineering units (msg)
 int rt_convert_nav_data(msg_nav_t* msg,unsigned char* msgbuf_in)
@@ -307,46 +258,26 @@ int rt_crc_check(unsigned char* MessageBuffer){
 // NAV module initializer
 static int __rtai_nav_init(void)
 {
-    RTIME tick_period;    // Determines the task's period
-    RTIME now;        // current time in ns
-    
     // Opens the NAV communication
     if (rt_open_nav() < 0) {
-        rt_printk("Nao abriu o dispositivo NAV\n");
-        return -1;
-        }
+        printk("Nao abriu o dispositivo NAV\n");
+        return 0;
+    }
 
-    // configures the NAV communication
-    /*if (rt_cfg_nav() < 0) {
-        rt_printk("Nao configurou o dispositivo NAV\n");
-        return -1;
-        }*/
-
-    // Creates the real time task
-    if (rt_task_init(&task_nav, func_nav, 0, 5000, NAV_TASK_PRIORITY, 0, 0) < 0) {
-        rt_printk("Falha ao criar a tarefa de tempo real do NAV\n");
-        return -1;
+    // Sets serial port interrupt callback
+    if (rt_spset_callback_fun(NAV_PORT, &serial_callback, 1, 1) == -EINVAL) {
+        printk("[NAV] Invalid parameters for setting serial port callback.\n");
+	return 0;
     }
     
-    // Determines the task execution period as being a 1 ms multiple (PERIOD* 1 ms)
-    tick_period = NAV_PERIOD*start_rt_timer(nano2count(A_MILLI_SECOND));
-    now = rt_get_time();
-    
-    //Launches the main task as a periodic task
-    if (rt_task_make_periodic(&task_nav, now + tick_period, tick_period) < 0) {
-        rt_printk("[__rtai_nav_init]:Nao consegui lancar tarefa de tempo real periodicamente\n");
-                return -1;
-    }
     return 0;
-};
+}
 
 // NAV module's destructor
 static void __rtai_nav_cleanup(void)
 {
-    //Terminates the real time task
-    rt_task_delete(&task_nav);
-    rt_close_serial(NAV_PORT);    
-};
+    rt_close_serial(NAV_PORT);
+}
 
 module_init(__rtai_nav_init);
 module_exit(__rtai_nav_cleanup);

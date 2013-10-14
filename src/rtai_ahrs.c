@@ -22,6 +22,8 @@ MODULE_AUTHOR("Victor Costa da Silva Campos");
 MODULE_DESCRIPTION("Real time data acquisition of xbow AHRS400DC-200");
 MODULE_LICENSE("GPL");
 
+static void serial_callback(int rxavail, int txfree);
+
 /*--------------------------------------------------------------------------------------------
                     AHRS FUNCTIONS
 --------------------------------------------------------------------------------------------*/
@@ -152,33 +154,8 @@ int rt_cfg_ahrs(void)
     }
     else {
         return 0; //success
-    }; 
-};
-
-// Main function executed by the AHRS real time task
-void func_ahrs(int t)
-{
-    unsigned char msgbuf[AHRS_MSG_LEN]; //buffer for receiving the message
-    int read_status;
-        
-    while (1) { // while the modules doesn't terminates        
-        // Tries to process incoming messages
-        read_status = rt_process_ahrs_serial(msgbuf);
-	
-        // if it is a valid message, updates the global variable
-        if (read_status != -1)
-        {
-            //Sets the new data variable
-            global_msg_ahrs.validade = read_status;
-            global_new_data = rt_convert_ahrs_data(&global_msg_ahrs, msgbuf);
-        }
-	
-        //Waits for 20ms (50Hz)
-        rt_task_wait_period();
     }
-
-    return (void)0;
-};
+}
 
 //Transform a 2-complement word (2 bytes) to a common int
 int convert_int_data(unsigned char msb,unsigned char lsb){
@@ -193,7 +170,7 @@ int convert_int_data(unsigned char msb,unsigned char lsb){
         data = word;
     }
     return data;
-};
+}
 
 //Convert the message received (msgbuf) to engineering units (msg)
 int rt_convert_ahrs_data(msg_ahrs_t* msg,unsigned char* msgbuf)
@@ -288,8 +265,8 @@ int rt_process_ahrs_serial(unsigned char* MessageBuffer)
 		      return 1;
                 }
             break;
-        };
-    };
+        }
+    }
     return -1;    // No available data
 };
 
@@ -301,47 +278,37 @@ int rt_chksum_check(unsigned char* MessageBuffer){
     int i = 0;
     for (i = 0; i < (AHRS_MSG_LEN-1); ++i) {
         sum += (MessageBuffer[i]&0xFF);
-    };
+    }
     if ((sum % 256) == (MessageBuffer[AHRS_MSG_LEN-1]&0xFF))
         return 1;
     else
         return 0;
-};
+}
 
 // AHRS module initializer
 static int __rtai_ahrs_init(void)
-{
-    
-    RTIME tick_period;    // Determines the task's period
-    RTIME now;        // current time in ns
+{    
+    int err;
     
     // Opens the AHRS communication
     if (rt_open_ahrs() < 0) {
         rt_printk("Nao abriu o dispositivo AHRS\n");
-        return -1;
-        }
+        return 0;
+    }
 
     //Configures the device
     if (rt_cfg_ahrs() < 0) {
         rt_printk("Nao configurou o dispositivo AHRS\n");
-        return -1;
+        return 0;
     }
 
-    // Creates the real time task
-    if (rt_task_init(&task_ahrs, func_ahrs, 0, 5000, AHRS_TASK_PRIORITY, 0, 0) < 0) {
-        rt_printk("Falha ao criar a tarefa de tempo real do AHRS\n");
-        return -1;
+    // Sets serial port interrupt callback
+    err = rt_spset_callback_fun(AHRS_PORT, &serial_callback, 1, 1);
+    if (err == -EINVAL) {
+        rt_printk("[AHRS] Invalid parameters for setting serial port callback.\n");
+	return 0;
     }
-    
-    // Determines the task execution period as being a 1 ms multiple (PERIOD* 1 ms)
-    tick_period = AHRS_PERIOD*start_rt_timer(nano2count(A_MILLI_SECOND));
-    now = rt_get_time();
-    
-    //Launches the main task as a periodic task
-    if (rt_task_make_periodic(&task_ahrs, now + tick_period, tick_period) < 0) {
-        rt_printk("Nao consegui lancar tarefa de tempo real periodicamente\n");
-                return -1;
-    }
+
     return 0;
 };
 
@@ -349,18 +316,12 @@ static int __rtai_ahrs_init(void)
 static void __rtai_ahrs_cleanup(void)
 {
 
-    //Terminates the real time task
-    rt_task_delete(&task_ahrs);
-    if (rt_clear_serial(AHRS_PORT) == 0)
-        rt_printk("Limpou a serial do AHRS com sucesso\n");
-    else
-        rt_printk("Não conseguiu limpar a porta serial do AHRS\n");
     if (rt_close_serial(AHRS_PORT) == 0)
         rt_printk("Fechou a parta serial do AHRS com sucesso\n");
     else
-        rt_printk("Não conseguiu fechar a porta serial do AHRS\n");    
+        rt_printk("Não conseguiu fechar a porta serial do AHRS\n");
 
-};
+}
 
 module_init(__rtai_ahrs_init);
 module_exit(__rtai_ahrs_cleanup);
@@ -411,3 +372,16 @@ int rt_get_ahrs_data(msg_ahrs_t *msg)
     return 0; // Old data
 };
 
+static void serial_callback(int rxavail, int txfree) {
+    static unsigned char msgbuf[AHRS_MSG_LEN]; //buffer for receiving the message
+    int read_status = rt_process_ahrs_serial(msgbuf);
+  
+    // if it is a valid message, updates the global variable
+    if (read_status != -1)
+    {
+        //Sets the new data variable
+	global_msg_ahrs.time_sys = rt_get_time_ns();
+        global_msg_ahrs.validade = read_status;
+	global_new_data = rt_convert_ahrs_data(&global_msg_ahrs, msgbuf);
+    }
+}
